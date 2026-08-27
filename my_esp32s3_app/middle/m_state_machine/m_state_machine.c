@@ -45,33 +45,35 @@ static void on_mqtt_message_received(const char *topic, int topic_len,
   ESP_LOGI(TAG, "==> Nhan MQTT Topic: %.*s | Payload: %.*s", topic_len, topic,
            data_len, data);
 
-  //   if (strncmp(topic, TOPIC_PUMP_COMMAND, topic_len) == 0) {
+  if (strncmp(topic, TOPIC_PUMP_OTA, topic_len) == 0) {
 
-  //     char payload_str[128] = {0};
-  //     if (data_len < (int)sizeof(payload_str)) {
-  //       memcpy(payload_str, data, data_len);
-  //     } else {
-  //       memcpy(payload_str, data, sizeof(payload_str) - 1);
-  //     }
+    ESP_LOGE(TAG, "check debug funcion ota ");
 
-  //     if (strstr(payload_str, "\"pump\":1") != NULL ||
-  //         strstr(payload_str, "ON") != NULL || strstr(payload_str, "1") !=
-  //         NULL) {
-  //       ESP_LOGI(TAG, "[LENH] -> BAT BOM!");
-  //       app_mqtt_publish(TOPIC_PUMP_STATUS,
-  //       "{\"pump\":1,\"status\":\"running\"}",
-  //                        1, 0);
+    // char payload_str[128] = {0};
+    // if (data_len < (int)sizeof(payload_str)) {
+    //   memcpy(payload_str, data, data_len);
+    // } else {
+    //   memcpy(payload_str, data, sizeof(payload_str) - 1);
+    // }
 
-  //     } else if (strstr(payload_str, "\"pump\":0") != NULL ||
-  //                strstr(payload_str, "OFF") != NULL ||
-  //                strstr(payload_str, "0") != NULL) {
-  //       ESP_LOGI(TAG, "[LENH] -> TAT BOM!");
+    // if (strstr(payload_str, "\"pump\":1") != NULL ||
+    //     strstr(payload_str, "ON") != NULL || strstr(payload_str, "1") !=
+    //     NULL) {
+    //   ESP_LOGI(TAG, "[LENH] -> BAT BOM!");
+    //   app_mqtt_publish(TOPIC_PUMP_STATUS,
+    //   "{\"pump\":1,\"status\":\"running\"}",
+    //                    1, 0);
 
-  //       app_mqtt_publish(TOPIC_PUMP_STATUS,
-  //       "{\"pump\":0,\"status\":\"stopped\"}",
-  //                        1, 0);
-  //     }
-  //   }
+    // } else if (strstr(payload_str, "\"pump\":0") != NULL ||
+    //            strstr(payload_str, "OFF") != NULL ||
+    //            strstr(payload_str, "0") != NULL) {
+    //   ESP_LOGI(TAG, "[LENH] -> TAT BOM!");
+
+    //   app_mqtt_publish(TOPIC_PUMP_STATUS,
+    //   "{\"pump\":0,\"status\":\"stopped\"}",
+    //                    1, 0);
+    // }
+  }
 }
 
 bool get_ssid_password(char *ssid_out, char *pass_out) {
@@ -191,6 +193,7 @@ void m_state_machine_task(void *arg) {
       ESP_LOGI(TAG, "MQTT connected");
 
       app_mqtt_subscribe(TOPIC_PUMP_COMMAND, 1);
+      app_mqtt_subscribe(TOPIC_PUMP_OTA, 1);
 
       //   app_mqtt_publish(TOPIC_PUMP_STATUS,
       //   "{\"status\":\"online\",\"pump\":0}",

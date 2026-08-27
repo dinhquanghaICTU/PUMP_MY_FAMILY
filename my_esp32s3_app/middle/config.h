@@ -11,5 +11,6 @@
 
 #define TOPIC_PUMP_COMMAND "pump/family/command"
 #define TOPIC_PUMP_STATUS "pump/family/status"
+#define TOPIC_PUMP_OTA "pump/family/ota"
 
 #endif /* __CONFIG_H__ */
