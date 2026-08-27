@@ -5,12 +5,15 @@ idf_component_register(
         "mqtt/mqtt.c"
         "ble/ble.c"
         "flash/flash.c"
+        "m_state_machine/m_state_machine.c"
     INCLUDE_DIRS 
         "ota"
         "wifi"
         "mqtt"
         "ble"
         "flash"
+        "m_state_machine"
+        "."
     REQUIRES 
         esp_https_ota
         app_update

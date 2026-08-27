@@ -1,12 +1,14 @@
 #include "ble.h"
 #include "esp_log.h"
 #include "flash.h"
+#include "host/ble_gap.h"
 #include "host/ble_hs.h"
 #include "host/util/util.h"
 #include "nimble/nimble_port.h"
 #include "nimble/nimble_port_freertos.h"
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
+#include <stdbool.h>
 #include <string.h>
 
 static const char *TAG = "MIDDLE_BLE";
@@ -16,6 +18,7 @@ static char s_wifi_ssid[MAX_SSID_LEN] = {0};
 static char s_wifi_pass[MAX_PASS_LEN] = {0};
 static ble_wifi_config_cb_t s_config_cb = NULL;
 static uint8_t s_own_addr_type;
+bool connect_wifi = false;
 
 static int gatt_svr_chr_access_wifi(uint16_t conn_handle, uint16_t attr_handle,
                                     struct ble_gatt_access_ctxt *ctxt,
@@ -82,10 +85,16 @@ static int gatt_svr_chr_access_wifi(uint16_t conn_handle, uint16_t attr_handle,
       ESP_LOGI(TAG, "BLE da nhan PASSWORD: %s", s_wifi_pass);
 
       if (strlen(s_wifi_ssid) > 0) {
-        nvs_save_wifi_credentials(s_wifi_ssid, s_wifi_pass);
+        // connect_wifi = false;
+        // nvs_save_wifi_credentials(s_wifi_ssid, s_wifi_pass);
 
-        if (s_config_cb) {
-          s_config_cb(s_wifi_ssid, s_wifi_pass);
+        if ((strcmp(s_wifi_ssid, " ") != 0) &&
+            (strcmp(s_wifi_pass, " ") != 0)) {
+          if (s_config_cb) {
+            s_config_cb(s_wifi_ssid, s_wifi_pass);
+          }
+          connect_wifi = true;
+          ESP_LOGI(TAG, "nhận đủ config ssid and pass \r\n");
         }
       }
     }
@@ -200,11 +209,28 @@ esp_err_t ble_wifi_init(const char *device_name) {
 
 void ble_wifi_register_callback(ble_wifi_config_cb_t cb) { s_config_cb = cb; }
 
-esp_err_t ble_wifi_stop(void) { return nimble_port_stop(); }
+esp_err_t ble_wifi_stop(void) {
+
+  ESP_LOGI(TAG, "Stopping BLE...");
+
+  return nimble_port_stop();
+}
 
 void ble_wifi_get_credentials(char *ssid_out, char *pass_out) {
   if (ssid_out)
     strcpy(ssid_out, s_wifi_ssid);
   if (pass_out)
     strcpy(pass_out, s_wifi_pass);
+}
+
+esp_err_t ble_wifi_deinit(void) {
+  ESP_LOGI(TAG, "Stopping BLE...");
+  ble_gap_adv_stop();
+  int rc = nimble_port_stop();
+  if (rc == 0) {
+    nimble_port_deinit();
+    ESP_LOGI(TAG, "BLE Deinitialized successfully!");
+    return ESP_OK;
+  }
+  return ESP_FAIL;
 }

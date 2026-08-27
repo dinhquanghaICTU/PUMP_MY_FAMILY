@@ -16,6 +16,8 @@ extern "C" {
 #define MAX_SSID_LEN 33
 #define MAX_PASS_LEN 65
 
+extern bool connect_wifi;
+
 typedef void (*ble_wifi_config_cb_t)(const char *ssid, const char *password);
 
 esp_err_t ble_wifi_init(const char *device_name);
@@ -25,6 +27,7 @@ void ble_wifi_register_callback(ble_wifi_config_cb_t cb);
 esp_err_t ble_wifi_stop(void);
 
 void ble_wifi_get_credentials(char *ssid_out, char *pass_out);
+esp_err_t ble_wifi_deinit(void);
 
 #ifdef __cplusplus
 }
