@@ -1,0 +1,23 @@
+idf_component_register(
+    SRCS 
+        "ota/ota.c"
+        "wifi/wifi.c"
+        "mqtt/mqtt.c"
+        "ble/ble.c"
+        "flash/flash.c"
+    INCLUDE_DIRS 
+        "ota"
+        "wifi"
+        "mqtt"
+        "ble"
+        "flash"
+    REQUIRES 
+        esp_https_ota
+        app_update
+        esp_wifi
+        nvs_flash
+        mqtt
+        esp-tls
+        mbedtls
+        bt
+)

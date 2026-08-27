@@ -1,0 +1,9 @@
+idf_component_register(
+    SRCS 
+        "led.c"
+    INCLUDE_DIRS 
+        "."
+    REQUIRES 
+        driver
+        espressif__led_strip
+)
