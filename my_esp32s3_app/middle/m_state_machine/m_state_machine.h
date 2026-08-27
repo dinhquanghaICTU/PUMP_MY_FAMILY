@@ -28,5 +28,6 @@ typedef struct {
 void m_state_machine_task(void *arg);
 void m_state_machine_init(void);
 void m_state_machine_set_state(state_t state);
+bool get_ssid_password(char *ssid_out, char *pass_out);
 
 #endif //__M_STATE_MACHINE_H__

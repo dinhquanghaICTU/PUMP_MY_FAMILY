@@ -23,6 +23,7 @@ void app_main(void) {
   ESP_ERROR_CHECK(nvs_flash_init());
   led_init();
   xTaskCreate(m_state_machine_task, "m_state_machine", 4096, NULL, 5, NULL);
+  // xTaskCreate(m_state_machine_task, "m_state_machine", 4096, NULL, 5, NULL);
 
   // while (1) {
   //   turn_blinking_red();
