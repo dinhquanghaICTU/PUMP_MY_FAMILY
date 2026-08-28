@@ -4,7 +4,7 @@ idf_component_register(
         
     INCLUDE_DIRS "."
     REQUIRES 
-        led
+        hardware
         middle
         driver
         espressif__led_strip

@@ -6,6 +6,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "mqtt.h"
+#include "ota.h"
 #include "wifi.h"
 #include <string.h>
 
@@ -46,33 +47,19 @@ static void on_mqtt_message_received(const char *topic, int topic_len,
            data_len, data);
 
   if (strncmp(topic, TOPIC_PUMP_OTA, topic_len) == 0) {
+    char payload_str[512] = {0};
+    if (data_len < (int)sizeof(payload_str)) {
+      memcpy(payload_str, data, data_len);
+    } else {
+      memcpy(payload_str, data, sizeof(payload_str) - 1);
+    }
 
-    ESP_LOGE(TAG, "check debug funcion ota ");
-
-    // char payload_str[128] = {0};
-    // if (data_len < (int)sizeof(payload_str)) {
-    //   memcpy(payload_str, data, data_len);
-    // } else {
-    //   memcpy(payload_str, data, sizeof(payload_str) - 1);
-    // }
-
-    // if (strstr(payload_str, "\"pump\":1") != NULL ||
-    //     strstr(payload_str, "ON") != NULL || strstr(payload_str, "1") !=
-    //     NULL) {
-    //   ESP_LOGI(TAG, "[LENH] -> BAT BOM!");
-    //   app_mqtt_publish(TOPIC_PUMP_STATUS,
-    //   "{\"pump\":1,\"status\":\"running\"}",
-    //                    1, 0);
-
-    // } else if (strstr(payload_str, "\"pump\":0") != NULL ||
-    //            strstr(payload_str, "OFF") != NULL ||
-    //            strstr(payload_str, "0") != NULL) {
-    //   ESP_LOGI(TAG, "[LENH] -> TAT BOM!");
-
-    //   app_mqtt_publish(TOPIC_PUMP_STATUS,
-    //   "{\"pump\":0,\"status\":\"stopped\"}",
-    //                    1, 0);
-    // }
+    ota_config_t ota_cfg;
+    if (ota_parse_json(payload_str, &ota_cfg) == ESP_OK) {
+      ESP_LOGI(TAG, "Nhận lệnh OTA hợp lệ! Bắt đầu nâng cấp firmware...");
+      m_state_machine_set_state(STATE_OTA);
+      ota_start(&ota_cfg);
+    }
   }
 }
 
@@ -190,15 +177,21 @@ void m_state_machine_task(void *arg) {
       break;
     }
     case STATE_MQTT_CONNECTED: {
-      ESP_LOGI(TAG, "MQTT connected");
+      ESP_LOGI(TAG, "MQTT connected successfully!");
 
       app_mqtt_subscribe(TOPIC_PUMP_COMMAND, 1);
       app_mqtt_subscribe(TOPIC_PUMP_OTA, 1);
+      m_state_machine_set_state(STATE_IDLE);
+      break;
+    }
 
-      //   app_mqtt_publish(TOPIC_PUMP_STATUS,
-      //   "{\"status\":\"online\",\"pump\":0}",
-      //                    1, 0);
+    case STATE_IDLE: {
+      // Trạng thái nghỉ - Hệ thống chạy bình thường
+      break;
+    }
 
+    case STATE_OTA: {
+      // Đang trong tiến trình nạp OTA, tạm dừng các tác vụ khác
       break;
     }
 

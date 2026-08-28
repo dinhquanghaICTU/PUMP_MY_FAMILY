@@ -89,7 +89,9 @@ esp_err_t wifi_init(void) {
     return err;
   }
 
-  esp_netif_create_default_wifi_sta();
+  if (esp_netif_get_handle_from_ifkey("WIFI_STA_DEF") == NULL) {
+    esp_netif_create_default_wifi_sta();
+  }
 
   wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
   ESP_ERROR_CHECK(esp_wifi_init(&cfg));
@@ -98,6 +100,9 @@ esp_err_t wifi_init(void) {
       WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL));
   ESP_ERROR_CHECK(esp_event_handler_instance_register(
       IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL, NULL));
+
+  ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+  ESP_ERROR_CHECK(esp_wifi_start());
 
   return ESP_OK;
 }
@@ -116,9 +121,8 @@ esp_err_t wifi_connect_sta(const app_wifi_config_t *config) {
           sizeof(wifi_cfg.sta.password));
   wifi_cfg.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
 
-  ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
   ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_cfg));
-  return esp_wifi_start();
+  return esp_wifi_connect();
 }
 
 esp_err_t wifi_disconnect(void) {

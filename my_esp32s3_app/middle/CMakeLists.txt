@@ -16,6 +16,7 @@ idf_component_register(
         "."
     REQUIRES 
         esp_https_ota
+        esp_http_client
         app_update
         esp_wifi
         nvs_flash
@@ -23,4 +24,5 @@ idf_component_register(
         esp-tls
         mbedtls
         bt
+        third_party
 )

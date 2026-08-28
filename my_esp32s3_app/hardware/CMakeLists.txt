@@ -1,0 +1,19 @@
+idf_component_register(
+    SRCS 
+        "led/led.c"
+        "node_esp/node_esp.c"
+        "relay/relay.c"
+    INCLUDE_DIRS 
+        "led"
+        "node_esp"
+        "relay"
+        "."
+    REQUIRES 
+        driver
+        espressif__led_strip
+        esp_timer
+        esp_wifi
+        esp_event
+        nvs_flash
+        middle
+)

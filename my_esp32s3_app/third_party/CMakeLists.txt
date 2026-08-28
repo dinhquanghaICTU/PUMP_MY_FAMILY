@@ -1,9 +1,9 @@
 idf_component_register(
     SRCS 
-        "led.c"
+        "jsmn/jsmn.c"
     INCLUDE_DIRS 
+        "jsmn"
         "."
     REQUIRES 
-        driver
-        espressif__led_strip
+        log
 )
