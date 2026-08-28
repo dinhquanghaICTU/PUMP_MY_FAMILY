@@ -47,13 +47,20 @@ esp_err_t ota_parse_json(const char *json_str, ota_config_t *out_cfg) {
       TAG,
       "Bóc tách OTA thành công: Version=[%s], Target=[%s], Size=%d, URL=[%s]",
       out_cfg->version, out_cfg->target, out_cfg->size, out_cfg->url);
+
   return ESP_OK;
 }
+
+/*
+
+
+  nó vào đây để vào task ota
+*/
 
 static void ota_task(void *pvParameter) {
 
   ESP_LOGI(TAG, "URL: %s", s_current_ota_cfg.url);
-
+  // lúc này nó get data file bin từ url nó đã parser được
   esp_http_client_config_t http_config = {
       .url = s_current_ota_cfg.url,
       .crt_bundle_attach = esp_crt_bundle_attach,
@@ -68,13 +75,15 @@ static void ota_task(void *pvParameter) {
   /*
     check bug in ota this funcion
 
-
+    hàm này laf hàm chính để ota  cái này được sdk idf cung cấp
   */
   esp_err_t ret = esp_https_ota(&ota_config);
   if (ret == ESP_OK) {
     ESP_LOGI(TAG, "CẬP NHẬT OTA THÀNH CÔNG 100!");
     ESP_LOGI(TAG, "Đang khởi động lại hệ thống sau 2 giây...");
     vTaskDelay(pdMS_TO_TICKS(2000));
+
+    // sau khi ghi vào flash thành công nó sẽ restart để boot vào file ota mới
     esp_restart();
   } else {
     ESP_LOGE(TAG, "CẬP NHẬT OTA THẤT BẠI! Mã lỗi: %s (0x%x)",
@@ -85,6 +94,10 @@ static void ota_task(void *pvParameter) {
   vTaskDelete(NULL);
 }
 
+/*
+  sau đó nó sẽ vào hàm này để thực hiện ota
+
+*/
 esp_err_t ota_start(const ota_config_t *config) {
   if (!config || strlen(config->url) == 0) {
     return ESP_ERR_INVALID_ARG;
@@ -98,7 +111,7 @@ esp_err_t ota_start(const ota_config_t *config) {
 
   s_is_updating = true;
   memcpy(&s_current_ota_cfg, config, sizeof(ota_config_t));
-
+  // nó khởi tạo 1 task ota_task
   BaseType_t ret = xTaskCreate(ota_task, "ota_task", 8192, NULL, 5, NULL);
   if (ret != pdPASS) {
     ESP_LOGE(TAG, "Không thể tạo ota_task!");
