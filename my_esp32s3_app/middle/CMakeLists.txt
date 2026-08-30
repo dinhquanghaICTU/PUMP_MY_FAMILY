@@ -24,5 +24,8 @@ idf_component_register(
         esp-tls
         mbedtls
         bt
+        esp_timer
         third_party
+    PRIV_REQUIRES
+        hardware
 )

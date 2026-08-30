@@ -57,6 +57,21 @@ def log_message(msg):
 
 def get_local_ip():
     try:
+        import subprocess
+        ips = subprocess.getoutput("hostname -I").strip().split()
+        # 1. Ưu tiên dải mạng Hotspot QuangHa (192.168.12.x)
+        for ip in ips:
+            if ip.startswith("192.168.12."):
+                return ip
+        # 2. Ưu tiên các dải LAN nội bộ 192.168.x.x
+        for ip in ips:
+            if ip.startswith("192.168."):
+                return ip
+        if ips:
+            return ips[0]
+    except Exception:
+        pass
+    try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
         ip = s.getsockname()[0]

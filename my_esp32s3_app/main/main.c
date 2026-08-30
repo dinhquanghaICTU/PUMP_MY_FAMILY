@@ -1,4 +1,5 @@
 #include "ble.h"
+#include "button.h"
 #include "config.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
@@ -16,8 +17,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#define NVS_NAMESPACE "wifi_store"
-
 static const char *TAG = "MY_APP";
 
 void app_main(void) {
@@ -25,21 +24,26 @@ void app_main(void) {
 
   esp_ota_mark_app_valid_cancel_rollback();
 
-  relay_init();
   ESP_ERROR_CHECK(nvs_flash_init());
+
+  relay_init();
+  button_init();
   led_init();
-  xTaskCreate(m_state_machine_task, "m_state_machine", 4096, NULL, 5, NULL);
   node_esp_init();
+
+  xTaskCreate(m_state_machine_task, "m_state_machine", 4096, NULL, 5, NULL);
+  xTaskCreate(button_task, "button_task", 4096, NULL, 5, NULL);
 }
 
 /* =========================================================================
-
-void app_main(void) {
+   ĐOẠN CODE TEST ROLLBACK CŨ (ĐỂ DÀNH THAM KHẢO)
+========================================================================= */
+/*
+void test_rollback_demo(void) {
   ESP_LOGE("ROLLBACK", "==================================================");
   ESP_LOGE("ROLLBACK", "FIRMWARE TEST: ĐANG CHẠY TRÊN PHÂN VÙNG OTA MỚI!");
-  ESP_LOGE("ROLLBACK", "CỐ TÌNH GỌI ROLLBACK SAU 3 GIÂY ĐỂ QUAY VỀ BẢN
-CŨ..."); ESP_LOGE("ROLLBACK",
-"==================================================");
+  ESP_LOGE("ROLLBACK", "CỐ TÌNH GỌI ROLLBACK SAU 3 GIÂY ĐỂ QUAY VỀ BẢN CŨ...");
+  ESP_LOGE("ROLLBACK", "==================================================");
 
   for (int i = 3; i > 0; i--) {
     ESP_LOGW("ROLLBACK", "Kích hoạt Rollback sau: %d giây...", i);
@@ -49,5 +53,4 @@ CŨ..."); ESP_LOGE("ROLLBACK",
   ESP_LOGE("ROLLBACK", "KÍCH HOẠT ROLLBACK VÀ REBOOT VỀ BẢN CŨ!");
   esp_ota_mark_app_invalid_rollback_and_reboot();
 }
-
-========================================================================= */
+*/

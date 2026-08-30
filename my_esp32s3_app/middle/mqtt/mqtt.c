@@ -30,6 +30,10 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base,
     ESP_LOGI(TAG, "MQTT Connected to HiveMQ Broker!");
     set_mqtt_state(MQTT_STATE_CONNECTED);
     xEventGroupSetBits(s_mqtt_event_group, MQTT_CONNECTED_BIT);
+    
+    // Tự động Subscribe / Re-Subscribe lại các topic điều khiển
+    esp_mqtt_client_subscribe(s_mqtt_client, "pump/family/command", 1);
+    esp_mqtt_client_subscribe(s_mqtt_client, "pump/family/ota", 1);
     break;
 
   case MQTT_EVENT_DISCONNECTED:
@@ -66,6 +70,11 @@ esp_err_t app_mqtt_init(const app_mqtt_config_t *config) {
     return ESP_ERR_INVALID_ARG;
   }
 
+  // Nếu đã khởi tạo rồi thì không tạo mới để tránh chạy song song 2 client trùng Client ID
+  if (s_mqtt_client != NULL) {
+    return ESP_OK;
+  }
+
   if (!s_mqtt_event_group) {
     s_mqtt_event_group = xEventGroupCreate();
   }
@@ -92,6 +101,11 @@ esp_err_t app_mqtt_init(const app_mqtt_config_t *config) {
 esp_err_t app_mqtt_start(void) {
   if (!s_mqtt_client)
     return ESP_ERR_INVALID_STATE;
+  
+  if (s_mqtt_state == MQTT_STATE_CONNECTED) {
+    return ESP_OK;
+  }
+
   set_mqtt_state(MQTT_STATE_CONNECTING);
   return esp_mqtt_client_start(s_mqtt_client);
 }

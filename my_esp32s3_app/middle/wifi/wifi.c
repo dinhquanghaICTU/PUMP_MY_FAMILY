@@ -59,6 +59,10 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base,
       }
       break;
 
+    case WIFI_STATE_RECONNECTING:
+      wifi_set_state(WIFI_STATE_RECONNECTING);
+      break;
+
     default:
       break;
     }
@@ -121,7 +125,19 @@ esp_err_t wifi_connect_sta(const app_wifi_config_t *config) {
           sizeof(wifi_cfg.sta.password));
   wifi_cfg.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
 
-  ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_cfg));
+  if (s_wifi_event_group) {
+    xEventGroupClearBits(s_wifi_event_group,
+                         WIFI_CONNECTED_BIT | WIFI_FAIL_BIT | WIFI_DISCONNECTED_BIT);
+  }
+
+  esp_wifi_disconnect();
+  vTaskDelay(pdMS_TO_TICKS(100));
+
+  esp_err_t err = esp_wifi_set_config(WIFI_IF_STA, &wifi_cfg);
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "esp_wifi_set_config: %s (bỏ qua để không crash)",
+             esp_err_to_name(err));
+  }
   return esp_wifi_connect();
 }
 
@@ -143,7 +159,7 @@ bool wifi_wait_for_connected(TickType_t timeout_ticks) {
   if (!s_wifi_event_group)
     return false;
   EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group,
-                                         WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
+                                         WIFI_CONNECTED_BIT,
                                          pdFALSE, pdFALSE, timeout_ticks);
   return (bits & WIFI_CONNECTED_BIT) != 0;
 }

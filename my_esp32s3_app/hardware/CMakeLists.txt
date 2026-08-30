@@ -3,10 +3,12 @@ idf_component_register(
         "led/led.c"
         "node_esp/node_esp.c"
         "relay/relay.c"
+        "button/button.c"
     INCLUDE_DIRS 
         "led"
         "node_esp"
         "relay"
+        "button"
         "."
     REQUIRES 
         driver
@@ -16,4 +18,5 @@ idf_component_register(
         esp_event
         nvs_flash
         middle
+        third_party
 )

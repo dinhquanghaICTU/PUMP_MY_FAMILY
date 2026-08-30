@@ -1,9 +1,12 @@
 idf_component_register(
     SRCS 
         "jsmn/jsmn.c"
+        "button/app_btn.c"
     INCLUDE_DIRS 
         "jsmn"
+        "button"
         "."
     REQUIRES 
         log
+        driver
 )

@@ -1,7 +1,9 @@
 #include "m_state_machine.h"
 #include "ble.h"
+#include "button.h"
 #include "config.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "flash.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -117,7 +119,7 @@ void m_state_machine_task(void *arg) {
         break;
       }
       /*
-        nếu chưa có ssid vs pass sẽ nhảy vào hàm nayf gọi ble để config wwifi
+        nếu chưa có ssid vs pass sẽ nhảy vào hàm nay gọi ble để config wwifi
 
       */
       if (!g_state_machine.ble_config_wifi) {
@@ -238,8 +240,10 @@ void m_state_machine_task(void *arg) {
         ESP_LOGE(TAG, "Ket noi MQTT That bai hoac Timeout!");
 
         if (!wifi_is_connected()) {
+          ESP_LOGE(TAG, "wifi disconnect!");
           m_state_machine_set_state(STATE_WIFI_DISCONNECT);
         } else {
+          ESP_LOGE(TAG, "wifi connected but mqtt disconnect!");
           vTaskDelay(pdMS_TO_TICKS(2000));
           m_state_machine_set_state(STATE_MQTT_CONNECTING);
         }
@@ -263,21 +267,53 @@ void m_state_machine_task(void *arg) {
     }
 
     case STATE_IDLE: {
-      // Trạng thái nghỉ - Hệ thống chạy bình thường
+      static int s_mqtt_disc_count = 0;
+      static int64_t s_last_check_time = 0;
+      int64_t now = esp_timer_get_time() / 1000; // ms
+
+      // Kiểm tra trạng thái mạng mỗi 2 giây
+      if (now - s_last_check_time >= 2000) {
+        s_last_check_time = now;
+
+        if (!wifi_is_connected()) {
+          ESP_LOGW(TAG,
+                   " Wi-Fi bị ngắt -> Tự động quay về STATE_WIFI_CONNECT!");
+          s_mqtt_disc_count = 0;
+          m_state_machine_set_state(STATE_WIFI_CONNECT);
+        } else if (!app_mqtt_is_connected()) {
+          s_mqtt_disc_count++;
+          ESP_LOGW(TAG, " MQTT đang mất kết nối (lần %d/5)...",
+                   s_mqtt_disc_count);
+          if (s_mqtt_disc_count >= 5) {
+            ESP_LOGE(TAG,
+                     " MQTT mất kết nối 5 lần -> Tự động khởi động lại Wi-Fi!");
+            s_mqtt_disc_count = 0;
+            m_state_machine_set_state(STATE_WIFI_CONNECT);
+          }
+        } else {
+          s_mqtt_disc_count = 0;
+        }
+      }
+      break;
+    }
+
+    case STATE_WIFI_DISCONNECT: {
+      ESP_LOGW(TAG, "Đã ngắt Wi-Fi -> Kết nối lại!");
+      vTaskDelay(pdMS_TO_TICKS(1000));
+      m_state_machine_set_state(STATE_WIFI_CONNECT);
       break;
     }
 
     case STATE_OTA: {
       // Đang trong tiến trình nạp OTA, tạm dừng các tác vụ khác
+      button_task_stop();
       break;
     }
 
     case STATE_WIFI_CONNECT_FAILSE:
-      if (g_state_machine.retry_count < MAX_RETRY_COUNT) {
-        m_state_machine_set_state(STATE_WIFI_CONFIG);
-        ESP_LOGI(TAG, "retry connect wifi count: %d",
-                 g_state_machine.retry_count);
-      }
+      ESP_LOGW(TAG, "Kết nối Wi-Fi thất bại -> Chờ 2 giây để thử lại...");
+      vTaskDelay(pdMS_TO_TICKS(2000));
+      m_state_machine_set_state(STATE_WIFI_CONFIG);
       break;
 
     default:

@@ -79,16 +79,16 @@ Phần cứng: **ESP32-S3-DevKitC-1 (N8R8 / N16R8 - Octal Flash & PSRAM)**
                                                                │
            ┌─────────────────────────┬─────────────────────────┘
            │                         │
-       [GPIO 1]                  [GPIO 0]
-      (ADC1_CH0)                     │
-           │                         ▼
-           ▼                  ┌─────────────┐
-    ┌─────────────┐           │ NÚT BẤM TAY │
-    │ CẢM BIẾN    │           │ MANUAL /    │ ─── (Nhấn nối GND)
-    │ ĐỘ ẨM ĐẤT / │           │ EMERGENCY   │
-    │ MỰC NƯỚC    │           └─────────────┘
-    │ (0 - 3.1V)  │
-    └─────────────┘
+        [GPIO 1]                  [GPIO 21]
+       (ADC1_CH0)                     │
+            │                         ▼
+            ▼                  ┌─────────────┐
+     ┌─────────────┐           │ NÚT BẤM TAY │
+     │ CẢM BIẾN    │           │ MANUAL /    │ ─── (Nhấn nối GND)
+     │ ĐỘ ẨM ĐẤT / │           │ EMERGENCY   │
+     │ MỰC NƯỚC    │           └─────────────┘
+     │ (0 - 3.1V)  │
+     └─────────────┘
                                  [GPIO 48] (Nội trên Board)
                                      │
                                      ▼
@@ -116,7 +116,7 @@ Phần cứng: **ESP32-S3-DevKitC-1 (N8R8 / N16R8 - Octal Flash & PSRAM)**
 | **2** | **GPIO 39** | **Relay Bơm Phụ / Van Nước** | Output | 3.3V Logic | Kích mở van xả hoặc bơm tăng áp |
 | **3** | **GPIO 40** | **Cảm Biến Lưu Lượng (Flow)** | Input (Interrupt)| 3.3V Pulse | Đếm số xung nước chảy qua tua-bin (Cần hạ áp nếu cảm biến ra 5V) |
 | **4** | **GPIO 1** | **Cảm Biến Nước / Độ Ẩm** | ADC Input (ADC1)| 0.0V - 3.1V | Đọc điện áp cảm biến tuyến tính (ADC1 an toàn 100% khi bật Wi-Fi) |
-| **5** | **GPIO 0** | **Nút Bấm Cứu Hộ / Bơm Tay**| Input (Pull-up) | Active LOW | Nhấn để bật tắt bơm thủ công hoặc giữ khi boot để nạp ROM |
+| **5** | **GPIO 21** | **Nút Bấm Cứu Hộ / Bơm Tay**| Input (Pull-up) | Active LOW | Nhấn để bật tắt bơm thủ công, giữ 3s bật/tắt Khóa trẻ em |
 | **6** | **GPIO 48** | **LED RGB WS2812 Onboard** | RMT Output | 3.3V / 5V | Đèn báo: **Xanh lá** (WiFi OK), **Xanh dương** (BLE), **Đỏ** (Lỗi/Mất mạng) |
 | **7** | **GPIO 4** | **I2C SDA** | I2C Data | 3.3V | Đường truyền dữ liệu màn hình OLED / Cảm biến môi trường |
 | **8** | **GPIO 5** | **I2C SCL** | I2C Clock | 3.3V | Xung nhịp đồng hồ giao tiếp I2C |

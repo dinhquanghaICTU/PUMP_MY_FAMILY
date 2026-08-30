@@ -1,4 +1,5 @@
 #include "ota.h"
+#include "button.h"
 #include "esp_crt_bundle.h"
 #include "esp_http_client.h"
 #include "esp_https_ota.h"
@@ -8,8 +9,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "jsmn.h"
+#include "m_state_machine.h"
 #include <string.h>
-
 static const char *TAG = "OTA_ENGINE";
 
 static ota_config_t s_current_ota_cfg = {0};
@@ -86,8 +87,11 @@ static void ota_task(void *pvParameter) {
     // sau khi ghi vào flash thành công nó sẽ restart để boot vào file ota mới
     esp_restart();
   } else {
+
     ESP_LOGE(TAG, "CẬP NHẬT OTA THẤT BẠI! Mã lỗi: %s (0x%x)",
              esp_err_to_name(ret), ret);
+    button_task_start();
+    m_state_machine_set_state(STATE_IDLE);
     s_is_updating = false;
   }
 
