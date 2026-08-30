@@ -5,6 +5,7 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "m_state_machine.h"
 #include "relay.h"
 
 static const char *TAG = "HARDWARE_BUTTON";
@@ -38,14 +39,15 @@ static void on_btn_event(int pin, int event, void *data) {
     uint32_t *hold_time = (uint32_t *)data;
     ESP_LOGW(
         TAG,
-        "[NÚT BẤM] -> Nhấn giữ 3 giây (%lu ms) -> Kích hoạt chức năng mở rộng!",
-        hold_time ? (unsigned long)*hold_time : 3000);
+        "[NÚT BẤM] -> Nhấn giữ 5 giây (%lu ms) -> Xóa Wi-Fi & Vào BLE Config!",
+        hold_time ? (unsigned long)*hold_time : 5000);
+    m_state_machine_reset_wifi();
   }
 }
 
 void button_task(void *pvParam) {
   s_btn_task_handle = xTaskGetCurrentTaskHandle();
-  ESP_LOGI(TAG, " Button Scanner Task đang chạy trên GPIO %d...", BUTTON_PIN);
+  ESP_LOGI(TAG, "Button Scanner Task đang chạy trên GPIO %d...", BUTTON_PIN);
 
   while (1) {
     app_btn_scan(NULL);

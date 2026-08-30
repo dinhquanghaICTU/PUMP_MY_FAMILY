@@ -7,6 +7,7 @@
 #include "flash.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "led.h"
 #include "mqtt.h"
 #include "ota.h"
 #include "wifi.h"
@@ -94,14 +95,20 @@ bool get_ssid_password(char *ssid_out, char *pass_out) {
     return false;
   memset(ssid_out, 0, MAX_SSID_LEN);
   memset(pass_out, 0, MAX_PASS_LEN);
+  static bool s_logged_empty = false;
   esp_err_t err =
       nvs_load_wifi_credentials(ssid_out, MAX_SSID_LEN, pass_out, MAX_PASS_LEN);
   if (err == ESP_OK && strlen(ssid_out) > 0 && strlen(pass_out) > 0) {
     ESP_LOGI(TAG, "Da tim thay Wi-Fi trong Flash NVS: SSID = [%s], passs %s ",
              ssid_out, pass_out);
+    s_logged_empty = false;
     return true;
   }
-  ESP_LOGW(TAG, "Chua co Wi-Fi duoc luu trong Flash NVS!");
+  if (!s_logged_empty) {
+    ESP_LOGW(TAG, "Chua co Wi-Fi duoc luu trong Flash NVS!");
+    s_logged_empty = true;
+  }
+
   return false;
 }
 
@@ -110,6 +117,7 @@ void m_state_machine_task(void *arg) {
     g_state_machine.state_current = g_state_machine.state_next;
     switch (g_state_machine.state_current) {
     case STATE_WIFI_CONFIG:
+      led_set_state(LED_STATE_BLE_CONFIG);
       /*
         nếu chưa có ssid vs pass sẵn sẽ nhảy qua swwich
         STATE_WIFI_CONNECT
@@ -196,6 +204,7 @@ void m_state_machine_task(void *arg) {
           nếu qúa 3 lần nó sẽ nhảy ra swich STATE_WIFI_CONFIG để vào lại
 
         */
+
         ESP_LOGE(TAG, "Wi-Fi Connect Failed!");
         g_state_machine.retry_count++;
         m_state_machine_set_state(STATE_WIFI_CONNECT_FAILSE);
@@ -209,6 +218,7 @@ void m_state_machine_task(void *arg) {
     */
     case STATE_WIFI_GOT_IP: {
       ESP_LOGI(TAG, "wifi ok");
+      led_set_state(LED_STATE_ONLINE_OK);
       m_state_machine_set_state(STATE_MQTT_CONNECTING);
       break;
     }
@@ -311,6 +321,7 @@ void m_state_machine_task(void *arg) {
     }
 
     case STATE_WIFI_CONNECT_FAILSE:
+      led_set_state(LED_STATE_WIFI_DISCONNECTED);
       ESP_LOGW(TAG, "Kết nối Wi-Fi thất bại -> Chờ 2 giây để thử lại...");
       vTaskDelay(pdMS_TO_TICKS(2000));
       m_state_machine_set_state(STATE_WIFI_CONFIG);
@@ -321,4 +332,16 @@ void m_state_machine_task(void *arg) {
     }
     vTaskDelay(pdMS_TO_TICKS(100));
   }
+}
+
+extern bool connect_wifi;
+void m_state_machine_reset_wifi(void) {
+  ESP_LOGW(TAG, "🚨 Xóa toàn bộ cấu hình Wi-Fi -> Chuyển sang BLE Config!");
+  nvs_erase_wifi_credentials();
+  wifi_disconnect();
+  memset(saved_ssid, 0, sizeof(saved_ssid));
+  memset(saved_pass, 0, sizeof(saved_pass));
+  connect_wifi = false;
+  g_state_machine.ble_config_wifi = false;
+  m_state_machine_set_state(STATE_WIFI_CONFIG);
 }

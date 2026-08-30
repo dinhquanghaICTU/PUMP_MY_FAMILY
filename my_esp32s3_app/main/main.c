@@ -33,6 +33,7 @@ void app_main(void) {
 
   xTaskCreate(m_state_machine_task, "m_state_machine", 4096, NULL, 5, NULL);
   xTaskCreate(button_task, "button_task", 4096, NULL, 5, NULL);
+  xTaskCreate(led_task, "led_task", 2048, NULL, 2, NULL);
 }
 
 /* =========================================================================

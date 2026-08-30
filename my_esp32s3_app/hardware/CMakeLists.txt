@@ -19,4 +19,6 @@ idf_component_register(
         nvs_flash
         middle
         third_party
+    PRIV_REQUIRES
+        application
 )
