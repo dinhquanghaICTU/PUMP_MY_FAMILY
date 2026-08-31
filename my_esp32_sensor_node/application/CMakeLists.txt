@@ -1,0 +1,14 @@
+idf_component_register(
+    SRCS 
+        "state_machine/state_machine.c"
+    INCLUDE_DIRS 
+        "state_machine"
+        "."
+    REQUIRES 
+        hardware
+        middle
+        freertos
+        esp_timer
+    PRIV_REQUIRES
+        main
+)

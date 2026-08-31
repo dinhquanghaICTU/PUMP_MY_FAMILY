@@ -16,7 +16,8 @@ typedef enum {
   STATE_WIFI_START,
   STATE_WIFI_CONNECT_FAILSE,
   STATE_IDLE,
-  STATE_OTA
+  STATE_OTA,
+  STATE_OTA_NODE_TANK
 } state_t;
 
 typedef struct {

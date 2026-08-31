@@ -38,11 +38,10 @@ esp_err_t wifi_init_sta(uint8_t channel) {
   ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
   ESP_ERROR_CHECK(esp_wifi_start());
 
-  ret = esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
-  if (ret != ESP_OK) {
-    ESP_LOGE(TAG, "esp_wifi_set_channel failed: %s", esp_err_to_name(ret));
-    return ret;
-  }
+  // Cố định Channel Wi-Fi an toàn cho ESP-NOW
+  esp_wifi_set_promiscuous(true);
+  esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
+  esp_wifi_set_promiscuous(false);
 
   s_is_wifi_initialized = true;
   ESP_LOGI(TAG, "Khởi tạo Wi-Fi STA cho ESP-NOW THÀNH CÔNG (Channel %d)",
@@ -54,5 +53,8 @@ esp_err_t wifi_set_channel(uint8_t channel) {
   if (!s_is_wifi_initialized) {
     return ESP_ERR_INVALID_STATE;
   }
-  return esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
+  esp_wifi_set_promiscuous(true);
+  esp_err_t err = esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
+  esp_wifi_set_promiscuous(false);
+  return err;
 }

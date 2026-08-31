@@ -1,14 +1,21 @@
 idf_component_register(
     SRCS 
         "wifi/wifi.c"
-        "esp_now/esp_now.c"
+        "esp_now/esp_now_node.c"
+        "ota/ota.c"
     INCLUDE_DIRS 
         "wifi"
         "esp_now"
+        "ota"
         "."
     REQUIRES 
         esp_wifi
         esp_event
         esp_netif
         nvs_flash
+        app_update
+        bootloader_support
+        esp_app_format
+    PRIV_REQUIRES
+        application
 )

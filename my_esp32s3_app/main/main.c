@@ -8,6 +8,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "led.h"
+#include "m_pump_controler.h"
 #include "m_state_machine.h"
 #include "mqtt.h"
 #include "node_esp.h"
@@ -30,6 +31,7 @@ void app_main(void) {
   button_init();
   led_init();
   node_esp_init();
+  m_pump_controler_init();
 
   xTaskCreate(m_state_machine_task, "m_state_machine", 4096, NULL, 5, NULL);
   xTaskCreate(button_task, "button_task", 4096, NULL, 5, NULL);

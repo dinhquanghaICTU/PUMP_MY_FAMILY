@@ -4,5 +4,8 @@ idf_component_register(
     INCLUDE_DIRS 
         "."
     REQUIRES 
+        application
+        middle
+        hardware
         nvs_flash
 )
