@@ -82,7 +82,7 @@ static void on_esp_now_recv_cb(const esp_now_recv_info_t *recv_info,
 
         esp_now_peer_info_t peer_info = {0};
         memcpy(peer_info.peer_addr, s_tank_mac, ESP_NOW_ETH_ALEN);
-        peer_info.channel = 1;
+        peer_info.channel = 0;
         peer_info.ifidx = WIFI_IF_STA;
         peer_info.encrypt = false;
         esp_now_add_peer(&peer_info);
@@ -147,7 +147,7 @@ esp_err_t node_esp_init(void) {
 
   esp_now_peer_info_t peer_info = {0};
   memcpy(peer_info.peer_addr, s_broadcast_mac, ESP_NOW_ETH_ALEN);
-  peer_info.channel = 1;
+  peer_info.channel = 0;
   peer_info.ifidx = WIFI_IF_STA;
   peer_info.encrypt = false;
 

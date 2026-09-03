@@ -190,8 +190,15 @@ esp_err_t ble_wifi_init(const char *device_name) {
 
   esp_err_t ret = nimble_port_init();
   if (ret != ESP_OK) {
-    ESP_LOGE(TAG, "Failed to init nimble %d", ret);
-    return ret;
+    ESP_LOGW(TAG, "nimble_port_init that bai (%d), thu don dep va khoi tao lai...", ret);
+    nimble_port_stop();
+    nimble_port_deinit();
+    vTaskDelay(pdMS_TO_TICKS(150));
+    ret = nimble_port_init();
+    if (ret != ESP_OK) {
+      ESP_LOGE(TAG, "Failed to init nimble %d", ret);
+      return ret;
+    }
   }
 
   ble_svc_gap_device_name_set(s_device_name);
@@ -210,9 +217,7 @@ esp_err_t ble_wifi_init(const char *device_name) {
 void ble_wifi_register_callback(ble_wifi_config_cb_t cb) { s_config_cb = cb; }
 
 esp_err_t ble_wifi_stop(void) {
-
   ESP_LOGI(TAG, "Stopping BLE...");
-
   return nimble_port_stop();
 }
 
@@ -228,6 +233,7 @@ esp_err_t ble_wifi_deinit(void) {
   ble_gap_adv_stop();
   int rc = nimble_port_stop();
   if (rc == 0) {
+    vTaskDelay(pdMS_TO_TICKS(100));
     nimble_port_deinit();
     ESP_LOGI(TAG, "BLE Deinitialized successfully!");
     return ESP_OK;

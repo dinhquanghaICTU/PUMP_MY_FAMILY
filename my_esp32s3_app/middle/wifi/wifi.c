@@ -123,7 +123,12 @@ esp_err_t wifi_connect_sta(const app_wifi_config_t *config) {
   strncpy((char *)wifi_cfg.sta.ssid, config->ssid, sizeof(wifi_cfg.sta.ssid));
   strncpy((char *)wifi_cfg.sta.password, config->password,
           sizeof(wifi_cfg.sta.password));
-  wifi_cfg.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
+  wifi_cfg.sta.threshold.authmode = WIFI_AUTH_WPA_PSK;
+  wifi_cfg.sta.scan_method = WIFI_FAST_SCAN;
+  wifi_cfg.sta.sort_method = WIFI_CONNECT_AP_BY_SIGNAL;
+  wifi_cfg.sta.threshold.rssi = -127;
+  wifi_cfg.sta.pmf_cfg.capable = true;
+  wifi_cfg.sta.pmf_cfg.required = false;
 
   if (s_wifi_event_group) {
     xEventGroupClearBits(s_wifi_event_group,
@@ -143,6 +148,11 @@ esp_err_t wifi_connect_sta(const app_wifi_config_t *config) {
 
 esp_err_t wifi_disconnect(void) {
   s_is_reconnect_en = false;
+  wifi_set_state(WIFI_STATE_DISCONNECTED);
+  if (s_wifi_event_group) {
+    xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
+    xEventGroupSetBits(s_wifi_event_group, WIFI_DISCONNECTED_BIT);
+  }
   return esp_wifi_disconnect();
 }
 

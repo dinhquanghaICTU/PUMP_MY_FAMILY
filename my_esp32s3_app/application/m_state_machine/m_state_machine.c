@@ -8,6 +8,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "led.h"
+#include "m_pump_controler.h"
 #include "mqtt.h"
 #include "ota.h"
 #include "wifi.h"
@@ -81,11 +82,70 @@ static void on_mqtt_message_received(const char *topic, int topic_len,
     */
     if (ota_parse_json(payload_str, &ota_cfg) == ESP_OK) {
       ESP_LOGI(TAG, "Nhận lệnh OTA hợp lệ! Bắt đầu nâng cấp firmware...");
-      // nó chuyển state qua ota để cpu không bị chiếm quyền cpu để tránh đang
-      // ghi flash dính lỗi
       m_state_machine_set_state(STATE_OTA);
-      // gọi funcion ota để thực hiện quá trình ota
       ota_start(&ota_cfg);
+    }
+  }
+
+  /*
+    Xử lý các lệnh điều khiển máy bơm từ MQTT: pump/family/command
+  */
+  if (strncmp(topic, TOPIC_PUMP_COMMAND, topic_len) == 0) {
+    char cmd_str[256] = {0};
+    if (data_len < (int)sizeof(cmd_str)) {
+      memcpy(cmd_str, data, data_len);
+    } else {
+      memcpy(cmd_str, data, sizeof(cmd_str) - 1);
+    }
+
+    ESP_LOGI(TAG, "🎮 [LỆNH ĐIỀU KHIỂN MQTT] Payload: %s", cmd_str);
+
+    // 1. Lệnh Bật / Tắt bơm
+    if (strstr(cmd_str, "\"action\":\"on\"") || strstr(cmd_str, "\"pump\":1") || strstr(cmd_str, "\"pump\":\"on\"")) {
+      m_pump_controler_set_pump(true);
+    } else if (strstr(cmd_str, "\"action\":\"off\"") || strstr(cmd_str, "\"pump\":0") || strstr(cmd_str, "\"pump\":\"off\"")) {
+      m_pump_controler_set_pump(false);
+    } else if (strstr(cmd_str, "\"action\":\"toggle\"")) {
+      m_pump_controler_toggle_pump();
+    }
+
+    // 2. Chuyển chế độ Auto / Manual
+    if (strstr(cmd_str, "\"mode\":\"auto\"") || strstr(cmd_str, "\"mode\":1")) {
+      m_pump_controler_set_mode(MODE_PUMP_AUTO);
+    } else if (strstr(cmd_str, "\"mode\":\"manual\"") || strstr(cmd_str, "\"mode\":0")) {
+      m_pump_controler_set_mode(MODE_PUMP_MANUAL);
+    }
+
+    // 3. Khóa trẻ em
+    if (strstr(cmd_str, "\"child_lock\":1") || strstr(cmd_str, "\"child_lock\":true")) {
+      m_pump_controler_set_child_lock(true);
+    } else if (strstr(cmd_str, "\"child_lock\":0") || strstr(cmd_str, "\"child_lock\":false")) {
+      m_pump_controler_set_child_lock(false);
+    }
+
+    // 4. Cài đặt ngưỡng và kích thước bể (Config)
+    if (strstr(cmd_str, "tank_height") || strstr(cmd_str, "min_pct") || strstr(cmd_str, "offset")) {
+      float tank_h = 0.0f, offset_cm = 0.0f;
+      int min_pct = -1, max_pct = -1;
+      
+      char *p;
+      if ((p = strstr(cmd_str, "\"tank_height\":"))) sscanf(p + 14, "%f", &tank_h);
+      if ((p = strstr(cmd_str, "\"offset\":"))) sscanf(p + 9, "%f", &offset_cm);
+      if ((p = strstr(cmd_str, "\"min_pct\":"))) sscanf(p + 10, "%d", &min_pct);
+      if ((p = strstr(cmd_str, "\"max_pct\":"))) sscanf(p + 10, "%d", &max_pct);
+
+      const m_controler_pump_t *ctx = m_pump_controler_get_context();
+      if (tank_h <= 0.0f) tank_h = ctx->tank_height_cm;
+      if (offset_cm <= 0.0f) offset_cm = ctx->sensor_offset_cm;
+      if (min_pct < 0) min_pct = ctx->min_water_percent;
+      if (max_pct < 0) max_pct = ctx->max_water_percent;
+
+      m_pump_controler_set_config(tank_h, offset_cm, min_pct, max_pct, 2700);
+    }
+
+    // 5. Xóa cảnh báo lỗi
+    if (strstr(cmd_str, "\"action\":\"clear_error\"")) {
+      m_pump_controler_clear_error();
     }
   }
 }
@@ -263,11 +323,6 @@ void m_state_machine_task(void *arg) {
     case STATE_MQTT_CONNECTED: {
       ESP_LOGI(TAG, "MQTT connected successfully!");
 
-      /*
-        lúc này nó subcriber vào hai topic
-        TOPIC_PUMP_COMMAND
-        TOPIC_PUMP_OTA
-      */
       app_mqtt_subscribe(TOPIC_PUMP_COMMAND, 1);
 
       app_mqtt_subscribe(TOPIC_PUMP_OTA, 1);
@@ -339,6 +394,8 @@ void m_state_machine_reset_wifi(void) {
   ESP_LOGW(TAG, "🚨 Xóa toàn bộ cấu hình Wi-Fi -> Chuyển sang BLE Config!");
   nvs_erase_wifi_credentials();
   wifi_disconnect();
+  m_pump_controler_set_mode(MODE_PUMP_MANUAL);
+  m_pump_controler_set_child_lock(false);
   memset(saved_ssid, 0, sizeof(saved_ssid));
   memset(saved_pass, 0, sizeof(saved_pass));
   connect_wifi = false;

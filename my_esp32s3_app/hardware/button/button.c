@@ -5,6 +5,7 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "m_pump_controler.h"
 #include "m_state_machine.h"
 #include "relay.h"
 
@@ -32,9 +33,8 @@ static uint32_t btn_gpio_read(uint32_t pin) {
 
 static void on_btn_event(int pin, int event, void *data) {
   if (event == APP_BTN_EVT_PRESSED) {
-    ESP_LOGI(TAG, "[NÚT BẤM] -> Nhấn nhả (GPIO %d) -> Đảo trạng thái Relay!",
-             pin);
-    relay_toggle();
+    ESP_LOGI(TAG, "[NÚT BẤM] -> Nhấn nhả (GPIO %d) -> Đảo trạng thái Bơm qua Controler!", pin);
+    m_pump_controler_toggle_pump();
   } else if (event == APP_BTN_EVT_HOLD) {
     uint32_t *hold_time = (uint32_t *)data;
     ESP_LOGW(

@@ -112,7 +112,7 @@ esp_err_t esp_now_node_init(uint8_t wifi_channel) {
 
   esp_now_peer_info_t peer_info = {0};
   memcpy(peer_info.peer_addr, s_broadcast_mac, ESP_NOW_ETH_ALEN);
-  peer_info.channel = wifi_channel;
+  peer_info.channel = 0;
   peer_info.ifidx = WIFI_IF_STA;
   peer_info.encrypt = false;
 
@@ -122,8 +122,7 @@ esp_err_t esp_now_node_init(uint8_t wifi_channel) {
     return ret;
   }
 
-  ESP_LOGI(TAG, "Khởi tạo ESP-NOW Sender & OTA Receiver thành công (Channel %d)",
-           wifi_channel);
+  ESP_LOGI(TAG, "Khởi tạo ESP-NOW Sender & OTA Receiver thành công (Tự động thích ứng mọi Channel Wi-Fi)");
   return ESP_OK;
 }
 
@@ -131,8 +130,15 @@ esp_err_t esp_now_node_send(const SensorData_t *data) {
   if (!data) {
     return ESP_ERR_INVALID_ARG;
   }
-  return esp_now_send(s_broadcast_mac, (const uint8_t *)data,
-                      sizeof(SensorData_t));
+  // Tự động quét và phát trên toàn bộ các kênh Wi-Fi (1 -> 13)
+  // Giúp Tủ Điện ở bất kỳ Channel Wi-Fi nào cũng nhận được ngay lập tức!
+  for (uint8_t ch = 1; ch <= 13; ch++) {
+    esp_wifi_set_promiscuous(true);
+    esp_wifi_set_channel(ch, WIFI_SECOND_CHAN_NONE);
+    esp_wifi_set_promiscuous(false);
+    esp_now_send(s_broadcast_mac, (const uint8_t *)data, sizeof(SensorData_t));
+  }
+  return ESP_OK;
 }
 
 esp_err_t esp_now_node_send_ota_response(uint8_t type, uint32_t code, const char *msg) {

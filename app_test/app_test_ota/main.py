@@ -1,13 +1,12 @@
-#!/usr/bin/env bash
 #!/usr/bin/env python3
 """
-OTA Firmware Test Tool & MQTT Command Hub - PUMP_MY_FAMILY
-- Giao diện Web trực quan (http://localhost:5050)
-- Tích hợp sẵn máy chủ HTTP File Server nội bộ để ESP32 tải trực tiếp file .bin
-- Ô bắn lệnh tùy biến (Custom Command / Quick Buttons) vào topic `pump/family/command`
-- Hỗ trợ OTA Dual-Node: Nạp cho Tủ Điện (ESP32-S3) & Bể Nước (ESP32-U qua ESP-NOW)
-- Kết nối bảo mật MQTT HiveMQ Cloud SSL/TLS (Port 8883)
-- Hiển thị log phản hồi trạng thái từ ESP32 theo thời gian thực
+PUMP_MY_FAMILY - SMART WATER PUMP DASHBOARD & OTA HUB
+- Giao diện Web trực quan thời gian thực (http://localhost:5050)
+- Giám sát mức nước (% và cm), thanh đo mực nước đồ họa sống động
+- Điều khiển Bật / Tắt máy bơm, chuyển chế độ Auto / Manual, Khóa trẻ em
+- Cấu hình kích thước bồn nước (Chiều cao, Offset cảm biến, Ngưỡng bật/tắt)
+- Nạp OTA Dual-Node: Tủ Điện (ESP32-S3) & Bể Nước (ESP32-U qua ESP-NOW)
+- Kết nối MQTT HiveMQ Cloud SSL/TLS (Port 8883)
 """
 
 import os
@@ -18,7 +17,6 @@ import socket
 import ssl
 import hashlib
 import threading
-import webbrowser
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
 
@@ -37,7 +35,7 @@ TOPIC_OTA = "pump/family/ota"
 TOPIC_COMMAND = "pump/family/command"
 TOPIC_STATUS = "pump/family/status"
 
-# ==================== BIẾN TRẠNG THÁI TOÀN CỤC ====================
+# ==================== TRẠNG THÁI HỆ THỐNG ====================
 APP_STATE = {
     "firmware_path": "",
     "firmware_filename": "",
@@ -46,6 +44,17 @@ APP_STATE = {
     "version": "2.0.0",
     "target": "esp32s3_cabinet",
     "mqtt_connected": False,
+    "telemetry": {
+        "pump": 0,
+        "mode": "auto",
+        "water_percent": 0.0,
+        "distance_cm": 0.0,
+        "battery": 0.0,
+        "runtime": 0,
+        "child_lock": 0,
+        "state": "IDLE",
+        "last_update": 0
+    },
     "logs": []
 }
 
@@ -54,7 +63,7 @@ def log_message(msg):
     entry = f"[{timestamp}] {msg}"
     print(entry)
     APP_STATE["logs"].append(entry)
-    if len(APP_STATE["logs"]) > 150:
+    if len(APP_STATE["logs"]) > 200:
         APP_STATE["logs"].pop(0)
 
 def get_local_ip():
@@ -84,16 +93,14 @@ LOCAL_IP = get_local_ip()
 FILE_SERVER_PORT = 8080
 WEB_UI_PORT = 5050
 
-# Đường dẫn file build sẵn
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 CABINET_BIN = os.path.join(PROJECT_ROOT, "my_esp32s3_app/build/main.bin")
 TANK_BIN = os.path.join(PROJECT_ROOT, "my_esp32_sensor_node/build/sensor_node.bin")
 
-# ==================== MÁY CHỦ HTTP PHỤC VỤ FILE FIRMWARE ====================
+# ==================== HTTP FILE SERVER PHỤC VỤ FIRMWARE ====================
 class FirmwareFileHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        log_message(f"📡 [FILE SERVER] ESP32 yêu cầu tải: {self.path} từ IP: {self.client_address[0]}")
-        
+        log_message(f"📡 [FILE SERVER] ESP32 yêu cầu tải file: {self.path} từ IP: {self.client_address[0]}")
         file_path = APP_STATE.get("firmware_path", "")
         if not file_path or not os.path.isfile(file_path):
             self.send_response(404)
@@ -126,28 +133,43 @@ def run_file_server():
     server = HTTPServer(("0.0.0.0", FILE_SERVER_PORT), FirmwareFileHandler)
     server.serve_forever()
 
-# ==================== MQTT CLIENT HANDLERS ====================
+# ==================== MQTT CLIENT ====================
 mqtt_client = None
 
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
         APP_STATE["mqtt_connected"] = True
-        log_message(f"🟢 Đã kết nối thành công tới HiveMQ Cloud (Port {MQTT_PORT} SSL/TLS)!")
+        log_message(f"🟢 Đã kết nối HiveMQ Cloud (Port {MQTT_PORT} SSL/TLS)!")
         client.subscribe(TOPIC_STATUS)
         client.subscribe(TOPIC_OTA)
         client.subscribe(TOPIC_COMMAND)
-        log_message(f"📥 Đã lắng nghe các topic: '{TOPIC_STATUS}', '{TOPIC_OTA}', '{TOPIC_COMMAND}'")
     else:
         APP_STATE["mqtt_connected"] = False
-        log_message(f"🔴 Kết nối MQTT thất bại! Return Code: {rc}")
+        log_message(f"🔴 Kết nối MQTT thất bại! Code: {rc}")
 
 def on_message(client, userdata, msg):
     payload_str = msg.payload.decode("utf-8", errors="ignore")
-    log_message(f"📩 [MQTT NHẬN] Topic: {msg.topic} | Payload: {payload_str}")
+    log_message(f"📩 [MQTT NHẬN] Topic: {msg.topic} | {payload_str}")
+    
+    if msg.topic == TOPIC_STATUS:
+        try:
+            data = json.loads(payload_str)
+            if "pump" in data:
+                APP_STATE["telemetry"]["pump"] = data.get("pump", 0)
+                APP_STATE["telemetry"]["mode"] = data.get("mode", "auto")
+                APP_STATE["telemetry"]["water_percent"] = data.get("water_percent", 0.0)
+                APP_STATE["telemetry"]["distance_cm"] = data.get("distance_cm", 0.0)
+                APP_STATE["telemetry"]["battery"] = data.get("battery", 0.0)
+                APP_STATE["telemetry"]["runtime"] = data.get("runtime", 0)
+                APP_STATE["telemetry"]["child_lock"] = data.get("child_lock", 0)
+                APP_STATE["telemetry"]["state"] = data.get("state", "IDLE")
+                APP_STATE["telemetry"]["last_update"] = int(time.time())
+        except Exception:
+            pass
 
 def run_mqtt():
     global mqtt_client
-    mqtt_client = mqtt.Client(client_id="Python_Test_Hub_" + str(int(time.time())))
+    mqtt_client = mqtt.Client(client_id="Python_Dashboard_Hub_" + str(int(time.time())))
     mqtt_client.username_pw_set(MQTT_USER, MQTT_PASS)
     mqtt_client.tls_set(cert_reqs=ssl.CERT_NONE)
     mqtt_client.tls_insecure_set(True)
@@ -162,341 +184,393 @@ def run_mqtt():
     except Exception as e:
         log_message(f"❌ Không thể kết nối MQTT: {e}")
 
-# ==================== GIAO DIỆN WEB HTML ====================
+# ==================== GIAO DIỆN WEB DASHBOARD ====================
 HTML_PAGE = """<!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PUMP_MY_FAMILY - TEST HUB & OTA CONTROLLER</title>
+    <title>PUMP_MY_FAMILY - DASHBOARD & OTA HUB</title>
     <style>
         :root {
-            --bg-color: #0f172a;
-            --card-bg: #1e293b;
-            --accent: #38bdf8;
-            --accent-hover: #0284c7;
+            --bg-color: #0b132b;
+            --card-bg: #1c2541;
+            --card-border: #3a506b;
+            --accent: #00f0ff;
+            --accent-glow: rgba(0, 240, 255, 0.4);
+            --water-color: #00b4d8;
             --text-main: #f8fafc;
             --text-muted: #94a3b8;
-            --success: #22c55e;
+            --success: #10b981;
             --danger: #ef4444;
             --warning: #f59e0b;
-            --border: #334155;
         }
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
         body { background-color: var(--bg-color); color: var(--text-main); padding: 20px; line-height: 1.5; }
-        .container { max-width: 1100px; margin: 0 auto; }
-        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
-        h1 { font-size: 22px; color: var(--accent); display: flex; align-items: center; gap: 8px; }
-        .badge { padding: 4px 10px; border-radius: 9999px; font-size: 12px; font-weight: bold; }
-        .badge-success { background: #064e3b; color: #34d399; }
-        .badge-danger { background: #7f1d1d; color: #f87171; }
+        .container { max-width: 1200px; margin: 0 auto; }
         
-        .card { background-color: var(--card-bg); border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid var(--border); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
-        .card h2 { font-size: 16px; margin-bottom: 16px; color: var(--text-main); display: flex; align-items: center; gap: 8px; border-left: 4px solid var(--accent); padding-left: 8px; }
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 14px; border-bottom: 1px solid var(--card-border); }
+        h1 { font-size: 24px; color: var(--accent); display: flex; align-items: center; gap: 10px; text-shadow: 0 0 10px var(--accent-glow); }
         
-        .row { display: flex; gap: 16px; margin-bottom: 14px; flex-wrap: wrap; }
-        .col { flex: 1; min-width: 240px; }
+        .badge { padding: 6px 14px; border-radius: 9999px; font-size: 13px; font-weight: bold; display: inline-flex; align-items: center; gap: 6px; }
+        .badge-success { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #10b981; }
+        .badge-danger { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid #ef4444; }
         
-        label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 6px; }
-        input[type="text"], select { width: 100%; padding: 10px 14px; background: #0f172a; border: 1px solid var(--border); border-radius: 8px; color: var(--text-main); font-size: 14px; }
-        input[type="text"]:focus, select:focus { outline: none; border-color: var(--accent); }
-        input[type="file"] { width: 100%; padding: 8px; background: #0f172a; border: 1px dashed var(--accent); border-radius: 8px; color: var(--text-muted); cursor: pointer; }
+        .grid-main { display: grid; grid-template-columns: 360px 1fr; gap: 20px; margin-bottom: 20px; }
+        @media (max-width: 900px) { .grid-main { grid-template-columns: 1fr; } }
         
-        .btn { padding: 10px 18px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
-        .btn-primary { background: var(--accent); color: #0f172a; }
-        .btn-primary:hover { background: var(--accent-hover); }
-        .btn-success { background: var(--success); color: #fff; }
-        .btn-warning { background: var(--warning); color: #0f172a; }
-        .btn-danger { background: var(--danger); color: #fff; }
-        .btn-secondary { background: #475569; color: #fff; }
+        .card { background-color: var(--card-bg); border-radius: 16px; padding: 20px; border: 1px solid var(--card-border); box-shadow: 0 8px 16px rgba(0,0,0,0.2); margin-bottom: 20px; }
+        .card h2 { font-size: 17px; margin-bottom: 16px; color: var(--text-main); display: flex; align-items: center; gap: 8px; border-left: 4px solid var(--accent); padding-left: 10px; }
         
-        .quick-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
-        .quick-btn { background: #334155; color: var(--text-main); border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 13px; cursor: pointer; transition: 0.2s; }
-        .quick-btn:hover { background: var(--accent); color: #0f172a; }
-
-        .preset-bin-btn { background: #1e3a8a; border: 1px solid #3b82f6; color: #93c5fd; border-radius: 8px; padding: 10px 14px; font-size: 13px; cursor: pointer; font-weight: bold; flex: 1; }
-        .preset-bin-btn:hover { background: #2563eb; color: #ffffff; }
-
-        .preset-tank-btn { background: #064e3b; border: 1px solid #10b981; color: #6ee7b7; border-radius: 8px; padding: 10px 14px; font-size: 13px; cursor: pointer; font-weight: bold; flex: 1; }
-        .preset-tank-btn:hover { background: #059669; color: #ffffff; }
-
-        .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; background: #0f172a; padding: 12px; border-radius: 8px; margin-top: 10px; border: 1px solid var(--border); }
-        .info-item { font-size: 13px; }
-        .info-label { color: var(--text-muted); }
-        .info-val { font-weight: bold; color: var(--accent); word-break: break-all; }
+        /* THANH ĐO BỒN NƯỚC ĐỒ HỌA */
+        .tank-container { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px 0; }
+        .tank-glass { width: 180px; height: 260px; border: 4px solid #64748b; border-radius: 16px; position: relative; overflow: hidden; background: rgba(15, 23, 42, 0.8); box-shadow: inset 0 0 20px rgba(0,0,0,0.6); }
+        .tank-water { position: absolute; bottom: 0; left: 0; right: 0; height: 50%; background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%); transition: height 0.8s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 0 20px rgba(56, 189, 248, 0.5); }
+        .tank-water::after { content: ''; position: absolute; top: -6px; left: 0; right: 0; height: 12px; background: rgba(255,255,255,0.4); border-radius: 50%; }
+        .tank-percent-label { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 32px; font-weight: 800; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.8); z-index: 10; }
+        .tank-stats { width: 100%; display: flex; justify-content: space-around; margin-top: 16px; font-size: 14px; text-align: center; }
+        .stat-box { background: rgba(15, 23, 42, 0.6); padding: 8px 14px; border-radius: 8px; border: 1px solid var(--card-border); flex: 1; margin: 0 4px; }
+        .stat-box .val { font-size: 18px; font-weight: bold; color: var(--accent); margin-top: 2px; }
         
-        .log-box { background: #090d16; border: 1px solid var(--border); border-radius: 8px; padding: 12px; height: 280px; overflow-y: auto; font-family: 'Courier New', Courier, monospace; font-size: 12px; line-height: 1.6; color: #38bdf8; white-space: pre-wrap; }
+        /* BẢNG ĐIỀU KHIỂN & TRẠNG THÁI BƠM */
+        .pump-status-card { display: flex; align-items: center; justify-content: space-between; padding: 18px; border-radius: 12px; margin-bottom: 16px; background: #0f172a; border: 1px solid var(--card-border); }
+        .pump-indicator { display: flex; align-items: center; gap: 14px; }
+        .pump-icon { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; background: #334155; }
+        .pump-on { background: linear-gradient(135deg, #10b981, #059669); box-shadow: 0 0 15px rgba(16, 185, 129, 0.6); animation: pulse 1.5s infinite; }
+        .pump-off { background: #334155; color: #94a3b8; }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { transform: scale(1.05); box-shadow: 0 0 0 12px rgba(16, 185, 129, 0); }
+            100% { transform: scale(1); }
+        }
+        
+        .control-btns { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 16px; }
+        button { cursor: pointer; border: none; border-radius: 10px; padding: 12px 16px; font-weight: bold; font-size: 14px; transition: all 0.2s ease; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+        button:hover { opacity: 0.9; transform: translateY(-2px); }
+        button:active { transform: translateY(0); }
+        
+        .btn-success { background: linear-gradient(135deg, #10b981, #059669); color: white; }
+        .btn-danger { background: linear-gradient(135deg, #ef4444, #dc2626); color: white; }
+        .btn-primary { background: linear-gradient(135deg, #0ea5e9, #0284c7); color: white; }
+        .btn-warning { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; }
+        .btn-purple { background: linear-gradient(135deg, #8b5cf6, #6d28d9); color: white; }
+        .btn-dark { background: #334155; color: #f8fafc; border: 1px solid var(--card-border); }
+        
+        .row { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+        .col { flex: 1; min-width: 140px; }
+        input, select { width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--card-border); background: #0f172a; color: white; font-size: 14px; }
+        label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+        
+        .log-box { background-color: #020617; border-radius: 10px; padding: 14px; font-family: 'Consolas', monospace; font-size: 12px; height: 180px; overflow-y: auto; color: #a5f3fc; border: 1px solid var(--card-border); }
+        .log-box div { margin-bottom: 4px; line-height: 1.4; word-break: break-all; }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>🚰 PUMP_MY_FAMILY - TEST HUB & OTA GATEWAY</h1>
-            <div id="mqtt-status" class="badge badge-danger">Đang kết nối MQTT...</div>
+            <h1>⚡ PUMP_MY_FAMILY - TRUNG TÂM ĐIỀU KHIỂN & TEST</h1>
+            <div id="mqtt-status" class="badge badge-danger">🔴 MQTT: Đang kết nối...</div>
         </header>
 
-        <!-- KHỐI 1: OTA FIRMWARE -->
-        <div class="card">
-            <h2>🚀 Nâng Cấp Firmware Từ Xa (OTA)</h2>
-
-            <div style="display: flex; gap: 10px; margin-bottom: 14px;">
-                <button type="button" class="preset-bin-btn" onclick="selectPreset('cabinet')">
-                    🏠 1-CHẠM: Chọn Firmware Tủ Điện (my_esp32s3_app/build/main.bin)
-                </button>
-                <button type="button" class="preset-tank-btn" onclick="selectPreset('tank')">
-                    🌊 1-CHẠM: Chọn Firmware Bể Nước (my_esp32_sensor_node/build/sensor_node.bin)
-                </button>
+        <div class="grid-main">
+            <!-- CỘT 1: THANH ĐO MỰC NƯỚC THỜI GIAN THỰC -->
+            <div class="card">
+                <h2>🌊 Mực Nước Bể Nước</h2>
+                <div class="tank-container">
+                    <div class="tank-glass">
+                        <div id="tank-water" class="tank-water" style="height: 0%;"></div>
+                        <div id="tank-pct" class="tank-percent-label">-- %</div>
+                    </div>
+                    <div class="tank-stats">
+                        <div class="stat-box">
+                            <div style="color:var(--text-muted);">Khoảng cách</div>
+                            <div id="tank-dist" class="val">-- cm</div>
+                        </div>
+                        <div class="stat-box">
+                            <div style="color:var(--text-muted);">Pin Node</div>
+                            <div id="tank-batt" class="val">-- V</div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            <form id="otaForm" onsubmit="sendOTA(event)">
-                <div class="form-group" style="margin-bottom: 12px;">
-                    <label>📁 Hoặc tải lên file .bin tùy chọn từ máy:</label>
-                    <input type="file" id="fileInput" accept=".bin" onchange="handleFileSelect(event)">
-                </div>
-
-                <div class="info-grid">
-                    <div class="info-item"><div class="info-label">Tên File:</div><div id="info-name" class="info-val">Chưa chọn</div></div>
-                    <div class="info-item"><div class="info-label">Dung lượng:</div><div id="info-size" class="info-val">0 KB</div></div>
-                    <div class="info-item"><div class="info-label">MD5 Checksum:</div><div id="info-md5" class="info-val">Chưa tính</div></div>
-                </div>
-
-                <div class="row" style="margin-top: 14px;">
-                    <div class="col">
-                        <label>🎯 Thiết bị nhận:</label>
-                        <select id="targetInput">
-                            <option value="esp32s3_cabinet">🏠 Con Tủ Điện (ESP32-S3 Master - Nạp Trực Tiếp)</option>
-                            <option value="esp32_tank">🌊 Con Bể Nước (ESP32-U Node - Bắn qua ESP-NOW)</option>
-                        </select>
+            <!-- CỘT 2: BẢNG ĐIỀU KHIỂN MÁY BƠM THÔNG MINH -->
+            <div>
+                <div class="card">
+                    <h2>🎛️ Bảng Điều Khiển Máy Bơm</h2>
+                    
+                    <div class="pump-status-card">
+                        <div class="pump-indicator">
+                            <div id="pump-icon" class="pump-icon pump-off">⚙️</div>
+                            <div>
+                                <div style="font-size: 18px; font-weight: bold;" id="pump-status-text">MÁY BƠM: TẮT</div>
+                                <div style="font-size: 13px; color: var(--text-muted);" id="pump-state-detail">Trạng thái: IDLE | Thời gian chạy: 0s</div>
+                            </div>
+                        </div>
+                        <div>
+                            <span id="mode-badge" class="badge" style="background:#0369a1; color:#e0f2fe;">CHẾ ĐỘ: TỰ ĐỘNG</span>
+                        </div>
                     </div>
-                    <div class="col">
-                        <label>🏷️ Version mới:</label>
-                        <input type="text" id="versionInput" value="2.0.0">
+
+                    <div class="control-btns">
+                        <button class="btn-success" onclick="sendCommand({'action': 'on'})">⚡ BẬT BƠM</button>
+                        <button class="btn-danger" onclick="sendCommand({'action': 'off'})">🛑 TẮT BƠM</button>
+                        <button class="btn-primary" onclick="sendCommand({'mode': 'auto'})">🤖 CHẾ ĐỘ AUTO</button>
+                        <button class="btn-dark" onclick="sendCommand({'mode': 'manual'})">✋ CHẾ ĐỘ MANUAL</button>
+                        <button class="btn-warning" onclick="toggleChildLock()">🔒 KHÓA TRẺ EM</button>
+                        <button class="btn-purple" onclick="sendCommand({'action': 'clear_error'})">🔄 XÓA LỖI</button>
+                    </div>
+
+                    <!-- CÀI ĐẶT THAM SỐ BỂ -->
+                    <div style="margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--card-border);">
+                        <div style="font-size: 14px; font-weight: bold; margin-bottom: 10px; color: var(--accent);">⚙️ Cấu Hình Thông Số Bể (Cm & %):</div>
+                        <div class="row">
+                            <div class="col">
+                                <label>Chiều cao bể (cm):</label>
+                                <input type="number" id="cfg-tank-height" value="120">
+                            </div>
+                            <div class="col">
+                                <label>Offset nắp/vùng mù (cm):</label>
+                                <input type="number" id="cfg-offset" value="25">
+                            </div>
+                            <div class="col">
+                                <label>Bật khi cạn dưới (%):</label>
+                                <input type="number" id="cfg-min-pct" value="25">
+                            </div>
+                            <div class="col">
+                                <label>Tắt khi đầy trên (%):</label>
+                                <input type="number" id="cfg-max-pct" value="95">
+                            </div>
+                        </div>
+                        <button class="btn-dark" style="width: 100%;" onclick="saveTankConfig()">💾 Lưu Cấu Hình Tham Số Bể Lên ESP32</button>
                     </div>
                 </div>
-
-                <div class="form-group" style="margin-bottom: 16px;">
-                    <label>🌐 URL Tải Firmware:</label>
-                    <input type="text" id="urlInput" value="http://__LOCAL_IP__:__HTTP_PORT__/firmware.bin">
-                </div>
-
-                <button type="submit" class="btn btn-primary" style="width: 100%; font-size: 15px; padding: 12px;">
-                    ⚡ BẮN LỆNH OTA QUA MQTT NGAY BÂY GIỜ
-                </button>
-            </form>
+            </div>
         </div>
 
-        <!-- KHỐI 2: ĐIỀU KHIỂN COMMAND -->
+        <!-- KHU VỰC OTA FIRMWARE DUAL-NODE -->
         <div class="card">
-            <h2>🎮 Điều Khiển Nhanh Bằng Lệnh MQTT (`pump/family/command`)</h2>
-            <div class="quick-actions">
-                <button class="quick-btn" onclick="setCmd('{\\"pump\\":1,\\"action\\":\\"on\\"}')">⚡ Bật Bơm</button>
-                <button class="quick-btn" onclick="setCmd('{\\"pump\\":1,\\"action\\":\\"off\\"}')">🛑 Tắt Bơm</button>
-                <button class="quick-btn" onclick="setCmd('{\\"mode\\":\\"auto\\"}')">🤖 Chế độ Auto</button>
-                <button class="quick-btn" onclick="setCmd('{\\"mode\\":\\"manual\\"}')">🖐️ Chế độ Manual</button>
-                <button class="quick-btn" onclick="setCmd('{\\"child_lock\\":1}')">🔒 Bật Khóa Trẻ Em</button>
-                <button class="quick-btn" onclick="setCmd('{\\"child_lock\\":0}')">🔓 Tắt Khóa Trẻ Em</button>
-                <button class="quick-btn" onclick="setCmd('{\\"action\\":\\"get_status\\"}')">📊 Lấy Trạng Thái</button>
+            <h2>🚀 Nạp Firmware Từ Xa (OTA Dual-Node)</h2>
+            <div style="margin-bottom: 12px; display: flex; gap: 10px; flex-wrap: wrap;">
+                <button class="btn-primary" onclick="selectPreset('cabinet')">🏠 1-CHẠM: Chọn Firmware Tủ Điện (main.bin)</button>
+                <button class="btn-purple" onclick="selectPreset('tank')">🌊 1-CHẠM: Chọn Firmware Bể Nước (sensor_node.bin)</button>
+            </div>
+            
+            <div class="row">
+                <div class="col">
+                    <label>Mục tiêu nạp (Target):</label>
+                    <select id="ota-target">
+                        <option value="esp32s3_cabinet">Tủ Điện Master (ESP32-S3)</option>
+                        <option value="esp32_tank">Bể Nước (ESP32-U qua ESP-NOW)</option>
+                    </select>
+                </div>
+                <div class="col">
+                    <label>Phiên bản (Version):</label>
+                    <input type="text" id="ota-version" value="2.0.0">
+                </div>
+            </div>
+            
+            <div id="ota-file-info" style="background:#0f172a; padding:10px 14px; border-radius:8px; margin-bottom:12px; font-size:13px; border:1px solid var(--card-border);">
+                Chưa chọn file firmware...
             </div>
 
-            <form onsubmit="sendCommand(event)">
-                <div class="row">
-                    <div class="col" style="flex: 0 0 35%;">
-                        <label>Topic MQTT:</label>
-                        <input type="text" id="cmdTopic" value="pump/family/command">
-                    </div>
-                    <div class="col">
-                        <label>Nội dung Payload (JSON):</label>
-                        <input type="text" id="cmdPayload" value='{"pump":1,"action":"on"}'>
-                    </div>
-                </div>
-                <button type="submit" class="btn btn-success" style="width: 100%;">
-                    🚀 BẮN LỆNH ĐIỀU KHIỂN
-                </button>
-            </form>
+            <button class="btn-warning" style="width:100%; font-size:15px; padding:14px;" onclick="startOTA()">⚡ BẮN LỆNH OTA QUA MQTT NGAY BÂY GIỜ</button>
         </div>
 
-        <!-- KHỐI 3: NHẬT KÝ LOG -->
+        <!-- NHẬT KÝ HOẠT ĐỘNG MQTT -->
         <div class="card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <h2>📋 Nhật Ký Log MQTT & Trạng Thái Theo Thời Gian Thực</h2>
-                <button class="btn btn-secondary" onclick="fetchLogs()" style="padding: 4px 12px; font-size: 12px;">Làm mới</button>
-            </div>
-            <div id="logBox" class="log-box">Đang tải logs...</div>
+            <h2>📋 Nhật Ký Log MQTT Trực Tuyến</h2>
+            <div id="log-box" class="log-box"></div>
         </div>
     </div>
 
     <script>
-        function setCmd(payload) {
-            document.getElementById('cmdPayload').value = payload;
-        }
+        let currentChildLock = 0;
 
-        function selectPreset(type) {
-            fetch('/api/select_preset?type=' + type)
-                .then(res => res.json())
+        function updateUI() {
+            fetch('/api/status')
+                .then(r => r.json())
                 .then(data => {
-                    if (data.success) {
-                        document.getElementById('info-name').innerText = data.filename;
-                        document.getElementById('info-size').innerText = (data.size / 1024).toFixed(2) + ' KB (' + data.size + ' bytes)';
-                        document.getElementById('info-md5').innerText = data.md5;
-                        document.getElementById('targetInput').value = data.target;
-                        document.getElementById('urlInput').value = data.url;
-                        alert("✅ Đã chọn firmware: " + data.filename + " cho mục tiêu: " + data.target);
+                    // Cập nhật trạng thái MQTT
+                    const mqttBadge = document.getElementById('mqtt-status');
+                    if (data.mqtt_connected) {
+                        mqttBadge.className = 'badge badge-success';
+                        mqttBadge.innerText = '🟢 MQTT: Đã kết nối HiveMQ Cloud';
                     } else {
-                        alert("❌ " + data.error);
+                        mqttBadge.className = 'badge badge-danger';
+                        mqttBadge.innerText = '🔴 MQTT: Mất kết nối!';
                     }
-                });
+
+                    // Cập nhật Telemetry
+                    const t = data.telemetry || {};
+                    const pct = Math.max(0, Math.min(100, t.water_percent || 0));
+                    
+                    document.getElementById('tank-water').style.height = pct + '%';
+                    document.getElementById('tank-pct').innerText = (t.water_percent >= 0 ? t.water_percent.toFixed(1) + '%' : 'MẤT SÓNG');
+                    document.getElementById('tank-dist').innerText = (t.distance_cm > 0 ? t.distance_cm.toFixed(1) + ' cm' : '-- cm');
+                    document.getElementById('tank-batt').innerText = (t.battery > 0 ? t.battery.toFixed(2) + ' V' : '-- V');
+
+                    // Cập nhật máy bơm
+                    const isPumpOn = (t.pump === 1);
+                    const pumpIcon = document.getElementById('pump-icon');
+                    const pumpText = document.getElementById('pump-status-text');
+                    const pumpDetail = document.getElementById('pump-state-detail');
+
+                    if (isPumpOn) {
+                        pumpIcon.className = 'pump-icon pump-on';
+                        pumpIcon.innerText = '💧';
+                        pumpText.innerText = 'MÁY BƠM: ĐANG BẬT';
+                        pumpText.style.color = '#34d399';
+                    } else {
+                        pumpIcon.className = 'pump-icon pump-off';
+                        pumpIcon.innerText = '⚙️';
+                        pumpText.innerText = 'MÁY BƠM: TẮT';
+                        pumpText.style.color = '#f8fafc';
+                    }
+
+                    pumpDetail.innerText = `Trạng thái: ${t.state || 'IDLE'} | Thời gian chạy: ${t.runtime || 0}s`;
+
+                    // Chế độ
+                    const modeBadge = document.getElementById('mode-badge');
+                    if (t.mode === 'auto') {
+                        modeBadge.innerText = 'CHẾ ĐỘ: TỰ ĐỘNG (AUTO)';
+                        modeBadge.style.background = '#0369a1';
+                    } else {
+                        modeBadge.innerText = 'CHẾ ĐỘ: THỦ CÔNG (MANUAL)';
+                        modeBadge.style.background = '#475569';
+                    }
+
+                    currentChildLock = t.child_lock || 0;
+
+                    // Log Box
+                    const logBox = document.getElementById('log-box');
+                    logBox.innerHTML = (data.logs || []).map(l => `<div>${l}</div>`).join('');
+                    logBox.scrollTop = logBox.scrollHeight;
+                })
+                .catch(err => console.error(err));
         }
 
-        function sendCommand(e) {
-            e.preventDefault();
-            const topic = document.getElementById('cmdTopic').value;
-            const payload = document.getElementById('cmdPayload').value;
-
+        function sendCommand(payload) {
             fetch('/api/send_raw', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ topic: topic, payload: payload })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (!data.success) {
-                    alert("❌ Lỗi: " + data.error);
-                }
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({topic: 'pump/family/command', payload: JSON.stringify(payload)})
             });
         }
 
-        function handleFileSelect(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            document.getElementById('info-name').innerText = file.name;
-            document.getElementById('info-size').innerText = (file.size / 1024).toFixed(2) + ' KB (' + file.size + ' bytes)';
-
-            const formData = new FormData();
-            formData.append("firmware", file);
-
-            fetch('/api/upload', {
-                method: 'POST',
-                body: formData
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    document.getElementById('info-md5').innerText = data.md5;
-                    document.getElementById('urlInput').value = data.url;
-                } else {
-                    alert("Lỗi tải file lên máy chủ!");
-                }
-            });
+        function toggleChildLock() {
+            const next = currentChildLock ? 0 : 1;
+            sendCommand({'child_lock': next});
         }
 
-        function sendOTA(e) {
-            e.preventDefault();
-            const version = document.getElementById('versionInput').value;
-            const target = document.getElementById('targetInput').value;
-            const url = document.getElementById('urlInput').value;
-
-            fetch('/api/send_ota', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    version: version,
-                    target: target,
-                    url: url
-                })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    alert("🚀 Đã bắn lệnh OTA qua MQTT thành công! Hãy theo dõi log phía dưới.");
-                } else {
-                    alert("❌ Lỗi: " + data.error);
-                }
-            });
+        function saveTankConfig() {
+            const cfg = {
+                tank_height: parseFloat(document.getElementById('cfg-tank-height').value),
+                offset: parseFloat(document.getElementById('cfg-offset').value),
+                min_pct: parseInt(document.getElementById('cfg-min-pct').value),
+                max_pct: parseInt(document.getElementById('cfg-max-pct').value)
+            };
+            sendCommand({'config': cfg});
+            alert('Đã gửi thông số cấu hình bể lên ESP32!');
         }
 
-        function fetchLogs() {
-            fetch('/api/status')
-                .then(res => res.json())
-                .then(data => {
-                    const statusBadge = document.getElementById('mqtt-status');
-                    if (data.mqtt_connected) {
-                        statusBadge.className = 'badge badge-success';
-                        statusBadge.innerText = 'MQTT: Đang trực tuyến (HiveMQ)';
+        function selectPreset(preset) {
+            fetch(`/api/preset?type=${preset}`)
+                .then(r => r.json())
+                .then(d => {
+                    if (d.success) {
+                        document.getElementById('ota-target').value = d.target;
+                        document.getElementById('ota-file-info').innerHTML = `
+                            <strong>📁 File đã chọn:</strong> ${d.filename} (${(d.size/1024).toFixed(1)} KB)<br>
+                            <strong>🔑 MD5:</strong> ${d.md5}<br>
+                            <strong>🎯 Mục tiêu:</strong> ${d.target === 'esp32s3_cabinet' ? 'Tủ Điện (ESP32-S3)' : 'Bể Nước (ESP32-U)'}
+                        `;
                     } else {
-                        statusBadge.className = 'badge badge-danger';
-                        statusBadge.innerText = 'MQTT: Mất kết nối!';
+                        alert(d.error);
                     }
-                    const logBox = document.getElementById('logBox');
-                    logBox.innerText = data.logs.join('\\n');
-                    logBox.scrollTop = logBox.scrollHeight;
                 });
         }
 
-        setInterval(fetchLogs, 1200);
-        fetchLogs();
+        function startOTA() {
+            const target = document.getElementById('ota-target').value;
+            const version = document.getElementById('ota-version').value;
+            fetch('/api/send_ota', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({target: target, version: version})
+            }).then(r => r.json()).then(d => {
+                if (!d.success) alert(d.error);
+            });
+        }
+
+        setInterval(updateUI, 1000);
+        updateUI();
     </script>
 </body>
 </html>
 """
 
+# ==================== WEB API SERVER ====================
 class WebUIHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
-        if parsed.path == "/" or parsed.path == "/index.html":
-            html = HTML_PAGE.replace("__LOCAL_IP__", LOCAL_IP).replace("__HTTP_PORT__", str(FILE_SERVER_PORT))
+        if parsed.path in ["/", "/index.html"]:
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()
-            self.wfile.write(html.encode("utf-8"))
+            self.wfile.write(HTML_PAGE.encode("utf-8"))
+
         elif parsed.path == "/api/status":
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
             self.wfile.write(json.dumps(APP_STATE).encode("utf-8"))
-        elif parsed.path == "/api/select_preset":
-            qs = parse_qs(parsed.query)
-            preset_type = qs.get("type", ["cabinet"])[0]
 
-            if preset_type == "tank":
-                target_path = TANK_BIN
-                target_name = "esp32_tank"
-                filename = "sensor_node.bin"
-            else:
-                target_path = CABINET_BIN
+        elif parsed.path == "/api/preset":
+            params = parse_qs(parsed.query)
+            preset_type = params.get("type", [""])[0]
+
+            if preset_type == "cabinet":
+                file_path = CABINET_BIN
                 target_name = "esp32s3_cabinet"
-                filename = "main.bin"
+            elif preset_type == "tank":
+                file_path = TANK_BIN
+                target_name = "esp32_tank"
+            else:
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": False, "error": "Sai preset"}).encode("utf-8"))
+                return
 
-            if not os.path.isfile(target_path):
+            if not os.path.exists(file_path):
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
-                self.wfile.write(json.dumps({"success": False, "error": f"Chưa tìm thấy file {target_path}! Hãy build dự án trước."}).encode("utf-8"))
+                self.wfile.write(json.dumps({
+                    "success": False,
+                    "error": f"Chưa tìm thấy file build tại: {file_path}. Vui lòng build dự án trước!"
+                }).encode("utf-8"))
                 return
 
-            with open(target_path, "rb") as f:
+            with open(file_path, "rb") as f:
                 content = f.read()
 
-            upload_dir = os.path.dirname(os.path.abspath(__file__))
-            save_path = os.path.join(upload_dir, "firmware.bin")
-            with open(save_path, "wb") as f:
-                f.write(content)
-
             md5_hash = hashlib.md5(content).hexdigest()
-            APP_STATE["firmware_path"] = save_path
-            APP_STATE["firmware_filename"] = filename
+            APP_STATE["firmware_path"] = file_path
+            APP_STATE["firmware_filename"] = os.path.basename(file_path)
             APP_STATE["firmware_size"] = len(content)
             APP_STATE["firmware_md5"] = md5_hash
             APP_STATE["target"] = target_name
 
-            log_message(f"📁 [1-CHẠM PRESET] Đã nạp file {filename} ({len(content)} bytes) | MD5: {md5_hash} | Target: {target_name}")
+            log_message(f"🎯 [1-CHẠM PRESET] Đã chọn: {os.path.basename(file_path)} ({len(content)} bytes) | MD5: {md5_hash}")
 
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
             self.wfile.write(json.dumps({
                 "success": True,
-                "filename": filename,
+                "filename": os.path.basename(file_path),
                 "size": len(content),
                 "md5": md5_hash,
                 "target": target_name,
@@ -508,48 +582,7 @@ class WebUIHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path == "/api/upload":
-            content_length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(content_length)
-            
-            upload_dir = os.path.dirname(os.path.abspath(__file__))
-            save_path = os.path.join(upload_dir, "firmware.bin")
-            
-            boundary = self.headers.get("Content-Type").split("boundary=")[-1].encode()
-            parts = body.split(b"--" + boundary)
-            file_data = b""
-            for part in parts:
-                if b'filename="' in part:
-                    sub_parts = part.split(b"\r\n\r\n", 1)
-                    if len(sub_parts) == 2:
-                        file_data = sub_parts[1].rsplit(b"\r\n", 1)[0]
-                        break
-
-            if not file_data:
-                file_data = body
-
-            with open(save_path, "wb") as f:
-                f.write(file_data)
-
-            md5_hash = hashlib.md5(file_data).hexdigest()
-            APP_STATE["firmware_path"] = save_path
-            APP_STATE["firmware_filename"] = "firmware.bin"
-            APP_STATE["firmware_size"] = len(file_data)
-            APP_STATE["firmware_md5"] = md5_hash
-
-            log_message(f"📁 Đã nhận file firmware tải lên: {len(file_data)} bytes | MD5: {md5_hash}")
-
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            self.wfile.write(json.dumps({
-                "success": True,
-                "md5": md5_hash,
-                "size": len(file_data),
-                "url": f"http://{LOCAL_IP}:{FILE_SERVER_PORT}/firmware.bin"
-            }).encode("utf-8"))
-
-        elif parsed.path == "/api/send_raw":
+        if parsed.path == "/api/send_raw":
             content_length = int(self.headers.get("Content-Length", 0))
             post_data = self.rfile.read(content_length)
             payload = json.loads(post_data.decode("utf-8"))
@@ -600,9 +633,8 @@ class WebUIHandler(BaseHTTPRequestHandler):
                 "filename": APP_STATE["firmware_filename"]
             }
 
-            ota_payload_str = json.dumps(ota_msg, indent=2)
-            mqtt_client.publish(TOPIC_OTA, ota_payload_str, qos=1)
-            log_message(f"📤 [BẮN LỆNH OTA] Topic: '{TOPIC_OTA}' \n{ota_payload_str}")
+            mqtt_client.publish(TOPIC_OTA, json.dumps(ota_msg), qos=1)
+            log_message(f"📤 [BẮN LỆNH OTA] Topic: '{TOPIC_OTA}'\\n{json.dumps(ota_msg, indent=2)}")
 
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -618,28 +650,25 @@ def run_web_server():
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("      PUMP_MY_FAMILY - CONTROL & OTA TEST HUB")
+    print("  🚀 PUMP_MY_FAMILY - SMART DASHBOARD & OTA TEST TOOL")
     print("=" * 60)
-    print(f"• Địa chỉ IP mạng LAN: {LOCAL_IP}")
-    print(f"• Giao diện Web UI   : http://localhost:{WEB_UI_PORT}")
-    print(f"• File Server OTA     : http://{LOCAL_IP}:{FILE_SERVER_PORT}/firmware.bin")
-    print(f"• MQTT Broker         : {MQTT_BROKER}:{MQTT_PORT} (SSL/TLS)")
+    print(f"  👉 IP Mạng Nội Bộ (Local IP) : {LOCAL_IP}")
+    print(f"  👉 Web Dashboard             : http://localhost:{WEB_UI_PORT}")
+    print(f"  👉 HTTP Firmware Server      : http://{LOCAL_IP}:{FILE_SERVER_PORT}/firmware.bin")
+    print(f"  👉 MQTT Broker (HiveMQ)      : {MQTT_BROKER}:{MQTT_PORT}")
     print("=" * 60)
 
     t_file = threading.Thread(target=run_file_server, daemon=True)
     t_file.start()
-    log_message(f"🚀 Firmware HTTP Server đang chạy tại: http://{LOCAL_IP}:{FILE_SERVER_PORT}/firmware.bin")
 
     t_mqtt = threading.Thread(target=run_mqtt, daemon=True)
     t_mqtt.start()
 
     t_web = threading.Thread(target=run_web_server, daemon=True)
     t_web.start()
-    log_message(f"🌐 Giao diện Web đã mở tại: http://localhost:{WEB_UI_PORT} (hoặc http://{LOCAL_IP}:{WEB_UI_PORT})")
 
     try:
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        print("\nĐang dừng chương trình...")
-        sys.exit(0)
+        print("\nĐang dừng ứng dụng...")

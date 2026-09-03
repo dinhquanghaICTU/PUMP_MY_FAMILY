@@ -6,6 +6,7 @@
 #include "mqtt.h"
 #include "node_esp.h"
 #include "relay.h"
+#include "wifi.h"
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -92,7 +93,7 @@ static void pump_controler_task(void *pvParam) {
     if (s_pump_ctx.is_pump_on &&
         s_pump_ctx.runtime_counter_sec >= s_pump_ctx.max_runtime_sec) {
       ESP_LOGE(TAG,
-               "🚨 [CẢNH BÁO BẢO VỆ] Máy bơm chạy liên tục quá %lu giây! Tự "
+               "[CẢNH BÁO BẢO VỆ] Máy bơm chạy liên tục quá %lu giây! Tự "
                "ngắt khẩn cấp.",
                (unsigned long)s_pump_ctx.max_runtime_sec);
       relay_turn_off();
@@ -104,6 +105,16 @@ static void pump_controler_task(void *pvParam) {
           "\"message\":\"Bơm chạy quá giờ, đã ngắt an toàn\"}",
           1, 0);
       continue;
+    }
+
+    // Khi mất mạng (Wi-Fi hoặc MQTT), tự động thoát chế độ Auto sang Manual và Tắt khóa trẻ em
+    bool is_online = wifi_is_connected() && app_mqtt_is_connected();
+    if (!is_online) {
+      if (s_pump_ctx.mode == MODE_PUMP_AUTO || s_pump_ctx.child_lock) {
+        ESP_LOGW(TAG, "📡 [MẤT KẾT NỐI MẠNG] Tự động THOÁT chế độ AUTO -> MANUAL và MỞ KHÓA nút cứng tủ điện!");
+        s_pump_ctx.mode = MODE_PUMP_MANUAL;
+        s_pump_ctx.child_lock = false;
+      }
     }
 
     if (s_pump_ctx.mode == MODE_PUMP_AUTO && seconds_since_last > 120 &&
@@ -143,6 +154,31 @@ static void pump_controler_task(void *pvParam) {
     } else if (s_pump_ctx.state_current != STATE_PUMP_ERROR_TIMEOUT &&
                s_pump_ctx.state_current != STATE_PUMP_ERROR_NODE_LOST) {
       s_pump_ctx.state_current = STATE_PUMP_IDLE;
+    }
+
+    static int s_telemetry_tick = 0;
+    if (++s_telemetry_tick >= 2) {
+      s_telemetry_tick = 0;
+      char stat_json[256];
+      snprintf(
+          stat_json, sizeof(stat_json),
+          "{\"pump\":%d,\"mode\":\"%s\",\"water_percent\":%.1f,\"distance_cm\":"
+          "%.1f,\"battery\":%.2f,\"runtime\":%lu,\"child_lock\":%d,\"state\":"
+          "\"%s\"}",
+          s_pump_ctx.is_pump_on ? 1 : 0,
+          s_pump_ctx.mode == MODE_PUMP_AUTO ? "auto" : "manual",
+          s_pump_ctx.current_percent, s_pump_ctx.current_distance_cm,
+          s_pump_ctx.node_battery_volt,
+          (unsigned long)s_pump_ctx.runtime_counter_sec,
+          s_pump_ctx.child_lock ? 1 : 0,
+          s_pump_ctx.state_current == STATE_PUMP_RUNNING
+              ? "RUNNING"
+              : (s_pump_ctx.state_current == STATE_PUMP_ERROR_TIMEOUT
+                     ? "ERROR_TIMEOUT"
+                     : (s_pump_ctx.state_current == STATE_PUMP_ERROR_NODE_LOST
+                            ? "ERROR_NODE_LOST"
+                            : "IDLE")));
+      app_mqtt_publish("pump/family/status", stat_json, 1, 0);
     }
   }
 }
@@ -191,8 +227,13 @@ void m_pump_controler_set_pump(bool turn_on) {
 }
 
 void m_pump_controler_toggle_pump(void) {
-  if (s_pump_ctx.child_lock && !relay_is_on()) {
-    ESP_LOGW(TAG, "Khóa trẻ em đang bật! Bỏ qua lệnh bật bơm.");
+  bool is_online = wifi_is_connected() && app_mqtt_is_connected();
+  if (is_online && s_pump_ctx.mode == MODE_PUMP_AUTO) {
+    ESP_LOGW(TAG, "🤖 [CHẾ ĐỘ TỰ ĐỘNG (AUTO)] Đang kích hoạt! Đã KHÓA nút cứng tủ điện (hãy chuyển sang MANUAL trên App để điều khiển bằng tay).");
+    return;
+  }
+  if (is_online && s_pump_ctx.child_lock) {
+    ESP_LOGW(TAG, "🔒 [KHÓA TRẺ EM] Đang BẬT! Bỏ qua thao tác bấm nút.");
     return;
   }
   relay_toggle();
