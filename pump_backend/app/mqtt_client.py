@@ -69,28 +69,44 @@ def on_message(client, userdata, msg):
                 # CHỈ cập nhật phiên bản từ gói tin telemetry thông thường, KHÔNG lấy từ gói tin ota_progress
                 if not data.get("event"):
                     if "version" in data and data["version"]:
-                        device.firmware_version = str(data["version"])
-                        # Nếu đang OTA tủ điện và version gửi lên khớp với target version -> Đẩy OTA thành công 100%!
-                        if current_ota_progress.get("target") == "esp32s3_cabinet" and current_ota_progress.get("version"):
+                        new_s3_ver = str(data["version"]).strip()
+                        old_s3_ver = str(device.firmware_version or "").strip()
+                        device.firmware_version = new_s3_ver
+                        
+                        # Nếu đang OTA tủ điện và version thay đổi hoặc khớp target version -> Đẩy OTA thành công 100%!
+                        is_target_match = False
+                        if current_ota_progress.get("version"):
                             exp_ver = str(current_ota_progress["version"]).lstrip("v").strip()
-                            got_ver = str(data["version"]).lstrip("v").strip()
-                            if exp_ver == got_ver and current_ota_progress.get("status") in ("in_progress", "rebooting", "pending_wait_full"):
-                                current_ota_progress["status"] = "success"
-                                current_ota_progress["percent"] = 100
-                                current_ota_progress["message"] = f"Xác nhận qua Telemetry: Tủ Điện đã kích hoạt firmware v{got_ver}!"
-                                print(f"🎉 [OTA AUTO SUCCESS] S3 Telemetry xác nhận version v{got_ver} khớp target!")
+                            got_ver = new_s3_ver.lstrip("v").strip()
+                            if exp_ver == got_ver:
+                                is_target_match = True
+                        is_version_changed = bool(old_s3_ver and new_s3_ver != old_s3_ver)
+
+                        if current_ota_progress.get("target") == "esp32s3_cabinet" and (is_target_match or is_version_changed):
+                            current_ota_progress["status"] = "success"
+                            current_ota_progress["percent"] = 100
+                            current_ota_progress["message"] = f"Tủ Điện đã kích hoạt firmware v{new_s3_ver} thành công!"
+                            print(f"🎉 [OTA AUTO SUCCESS] S3 Telemetry xác nhận version v{new_s3_ver} (Cũ: {old_s3_ver})!")
 
                     if "tank_version" in data and data["tank_version"]:
-                        device.tank_firmware_version = str(data["tank_version"])
-                        # Nếu đang OTA bể nước và tank_version gửi lên khớp với target version -> Đẩy OTA thành công 100%!
-                        if current_ota_progress.get("target") in ("esp32_tank", "node_tank") and current_ota_progress.get("version"):
+                        new_tank_ver = str(data["tank_version"]).strip()
+                        old_tank_ver = str(device.tank_firmware_version or "").strip()
+                        device.tank_firmware_version = new_tank_ver
+                        
+                        # Nếu đang OTA bể nước và version thay đổi hoặc khớp target version -> Đẩy OTA thành công 100%!
+                        is_target_match = False
+                        if current_ota_progress.get("version"):
                             exp_ver = str(current_ota_progress["version"]).lstrip("v").strip()
-                            got_ver = str(data["tank_version"]).lstrip("v").strip()
-                            if exp_ver == got_ver and current_ota_progress.get("status") in ("in_progress", "rebooting", "pending_wait_full"):
-                                current_ota_progress["status"] = "success"
-                                current_ota_progress["percent"] = 100
-                                current_ota_progress["message"] = f"Xác nhận qua Telemetry: Node Bể Nước đã kích hoạt firmware v{got_ver}!"
-                                print(f"🎉 [OTA AUTO SUCCESS] Node Bể Telemetry xác nhận version v{got_ver} khớp target!")
+                            got_ver = new_tank_ver.lstrip("v").strip()
+                            if exp_ver == got_ver:
+                                is_target_match = True
+                        is_version_changed = bool(old_tank_ver and new_tank_ver != old_tank_ver)
+
+                        if current_ota_progress.get("target") in ("esp32_tank", "node_tank") and (is_target_match or is_version_changed):
+                            current_ota_progress["status"] = "success"
+                            current_ota_progress["percent"] = 100
+                            current_ota_progress["message"] = f"Node Bể Nước đã kích hoạt firmware v{new_tank_ver} thành công!"
+                            print(f"🎉 [OTA AUTO SUCCESS] Node Bể Telemetry xác nhận version v{new_tank_ver} (Cũ: {old_tank_ver})!")
                 session.add(device)
                 session.commit()
 
