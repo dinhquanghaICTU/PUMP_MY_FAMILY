@@ -80,7 +80,7 @@ static void pump_controler_task(void *pvParam) {
 
     s_pump_ctx.last_node_seen_sec = seconds_since_last;
 
-    if (has_data && seconds_since_last < 60) {
+    if (has_data && seconds_since_last < 20) {
       s_pump_ctx.current_distance_cm = sensor_data.distance_cm;
       s_pump_ctx.node_battery_volt = sensor_data.battery_volt;
       s_pump_ctx.current_percent =
@@ -219,7 +219,7 @@ static void pump_controler_task(void *pvParam) {
       snprintf(
           stat_json, sizeof(stat_json),
           "{\"pump\":%d,\"mode\":\"%s\",\"water_percent\":%.1f,\"distance_cm\":"
-          "%.1f,\"battery\":%.2f,\"runtime\":%lu,\"child_lock\":%d,\"state\":"
+          "%.1f,\"battery\":%.2f,\"runtime\":%lu,\"child_lock\":%d,\"tank_online\":%d,\"state\":"
           "\"%s\",\"version\":\"%s\",\"tank_version\":\"%s\"}",
           s_pump_ctx.is_pump_on ? 1 : 0,
           s_pump_ctx.mode == MODE_PUMP_AUTO ? "auto" : "manual",
@@ -227,6 +227,7 @@ static void pump_controler_task(void *pvParam) {
           s_pump_ctx.node_battery_volt,
           (unsigned long)s_pump_ctx.runtime_counter_sec,
           s_pump_ctx.child_lock ? 1 : 0,
+          (has_data && seconds_since_last < 20) ? 1 : 0,
           s_pump_ctx.state_current == STATE_PUMP_RUNNING
               ? "RUNNING"
               : (s_pump_ctx.state_current == STATE_PUMP_ERROR_TIMEOUT

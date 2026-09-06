@@ -41,6 +41,7 @@ class Device(SQLModel, table=True):
     owner_id: str = Field(foreign_key="users.id")
 
     is_online: bool = Field(default=False)
+    is_tank_online: bool = Field(default=False)
     is_pump_running: bool = Field(default=False)
     is_auto_mode: bool = Field(default=True)
     is_child_lock: bool = Field(default=False)

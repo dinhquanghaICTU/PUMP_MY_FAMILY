@@ -1,3 +1,4 @@
+import asyncio
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -6,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session, select
 from app.database import init_db, engine
-from app.models import User, Role
+from app.models import User, Role, Device
 from app.mqtt_client import start_mqtt
 from app.routers import auth_router, device_router, pump_router, admin_router
 
@@ -36,8 +37,34 @@ async def lifespan(app: FastAPI):
     # Khởi chạy MQTT kết nối HiveMQ Cloud
     print("Đang kết nối HiveMQ Cloud...")
     start_mqtt()
+
+    # Khởi chạy Heartbeat Monitor phát hiện thiết bị mất nguồn / mất mạng trong 6 giây
+    async def device_heartbeat_worker():
+        while True:
+            try:
+                await asyncio.sleep(2)
+                now = datetime.utcnow()
+                with Session(engine) as session:
+                    devices = session.exec(select(Device).where(Device.is_online == True)).all()
+                    changed = False
+                    for dev in devices:
+                        if dev.updated_at and (now - dev.updated_at).total_seconds() > 6.0:
+                            dev.is_online = False
+                            dev.is_tank_online = False
+                            session.add(dev)
+                            changed = True
+                            print(f"🔴 [HEARTBEAT TIMEOUT] {dev.device_code} không gửi tín hiệu quá 6s -> Chuyển sang OFFLINE!")
+                    if changed:
+                        session.commit()
+            except asyncio.CancelledError:
+                break
+            except Exception as ex:
+                print(f"Lỗi kiểm tra Heartbeat thiết bị: {ex}")
+
+    heartbeat_task = asyncio.create_task(device_heartbeat_worker())
     
     yield
+    heartbeat_task.cancel()
     print("Đang tắt ứng dụng...")
 
 app = FastAPI(

@@ -20,6 +20,7 @@ def init_db():
             ALTER TABLE devices ADD COLUMN IF NOT EXISTS battery_voltage DOUBLE PRECISION;
             ALTER TABLE devices ADD COLUMN IF NOT EXISTS distance_cm DOUBLE PRECISION;
             ALTER TABLE devices ADD COLUMN IF NOT EXISTS pump_runtime INTEGER DEFAULT 0;
+            ALTER TABLE devices ADD COLUMN IF NOT EXISTS is_tank_online BOOLEAN DEFAULT FALSE;
         """))
         conn.commit()
 

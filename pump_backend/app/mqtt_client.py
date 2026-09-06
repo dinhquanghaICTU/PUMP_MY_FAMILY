@@ -1,6 +1,7 @@
 import json
 import ssl
 import time
+from datetime import datetime
 from urllib.parse import urlparse
 import paho.mqtt.client as mqtt
 from sqlmodel import Session, select
@@ -55,11 +56,31 @@ def on_message(client, userdata, msg):
             statement = select(Device).where(Device.device_code == "PUMP_FAMILY_01")
             device = session.exec(statement).first()
             if device:
+                # 1. Bắt tín hiệu ngắt kết nối (LWT hoặc OFFLINE)
+                if data.get("is_online") is False or data.get("state") == "OFFLINE":
+                    device.is_online = False
+                    device.is_tank_online = False
+                    device.updated_at = datetime.utcnow()
+                    session.add(device)
+                    session.commit()
+                    print(f"🔴 [MQTT LWT/OFFLINE] Thiết bị {device.device_code} đã OFFLINE!")
+                    return
+
                 device.is_online = True
+                device.updated_at = datetime.utcnow()
+
+                if "tank_online" in data:
+                    device.is_tank_online = bool(data["tank_online"] == 1)
+                elif "water_percent" in data and float(data["water_percent"]) >= 0:
+                    device.is_tank_online = True
+
                 if "water_percent" in data:
                     # Mức nước từ cảm biến (nếu -1 là chưa có dữ liệu từ node)
                     pct = float(data["water_percent"])
-                    device.water_level = max(0, min(100, int(pct))) if pct >= 0 else 0
+                    if pct >= 0:
+                        device.water_level = max(0, min(100, int(pct)))
+                    else:
+                        device.is_tank_online = False
                 if "pump" in data:
                     device.is_pump_running = bool(data["pump"] == 1)
                 if "mode" in data:

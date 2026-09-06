@@ -90,6 +90,7 @@ const btnSubmitOta = document.getElementById('btnSubmitOta');
 const adminFirmwareTableBody = document.getElementById('adminFirmwareTableBody');
 
 // Tank & Telemetry
+const tankLiveIndicator = document.getElementById('tankLiveIndicator');
 const waterBody = document.getElementById('waterBody');
 const waterPercentDisplay = document.getElementById('waterPercentDisplay');
 const waterStatusText = document.getElementById('waterStatusText');
@@ -418,9 +419,25 @@ function updateCurrentDeviceView() {
   if (currentDevice.is_online) {
     systemStatusBadge.className = 'status-badge online';
     systemStatusBadge.querySelector('.status-label').textContent = 'ONLINE (Cloud)';
+    
+    // Kiểm tra trạng thái Node Cảm Biến Bể
+    if (tankLiveIndicator) {
+      if (currentDevice.is_tank_online !== false) {
+        tankLiveIndicator.className = 'live-indicator';
+        tankLiveIndicator.innerHTML = '<span class="pulse-ring"></span><span class="indicator-text">LIVE TELEMETRY</span>';
+      } else {
+        tankLiveIndicator.className = 'live-indicator warning';
+        tankLiveIndicator.innerHTML = '<span class="pulse-ring"></span><span class="indicator-text">⚠️ MẤT KẾT NỐI CẢM BIẾN</span>';
+      }
+    }
   } else {
     systemStatusBadge.className = 'status-badge offline';
     systemStatusBadge.querySelector('.status-label').textContent = 'OFFLINE (Mất kết nối)';
+    
+    if (tankLiveIndicator) {
+      tankLiveIndicator.className = 'live-indicator offline';
+      tankLiveIndicator.innerHTML = '<span class="pulse-ring"></span><span class="indicator-text">🔴 OFFLINE (Mất nguồn S3)</span>';
+    }
   }
 
   // Water Level & Color Dynamics
@@ -428,7 +445,15 @@ function updateCurrentDeviceView() {
   waterBody.style.height = `${level}%`;
   waterPercentDisplay.textContent = `${level}%`;
 
-  if (level < 20) {
+  if (!currentDevice.is_online) {
+    waterBody.style.background = 'linear-gradient(180deg, #4b5563 0%, #1f2937 100%)';
+    waterStatusText.textContent = '⚠️ MẤT KẾT NỐI TỦ BƠM S3';
+    waterStatusText.style.color = '#f87171';
+  } else if (currentDevice.is_tank_online === false) {
+    waterBody.style.background = 'linear-gradient(180deg, #d97706 0%, #78350f 100%)';
+    waterStatusText.textContent = '⚠️ MẤT TÍN HIỆU NODE BỂ NƯỚC';
+    waterStatusText.style.color = '#fbbf24';
+  } else if (level < 20) {
     waterBody.style.background = 'linear-gradient(180deg, #ef4444 0%, #b91c1c 100%)';
     waterStatusText.textContent = '⚠️ BỂ CẠN NƯỚC';
     waterStatusText.style.color = '#fca5a5';
@@ -443,7 +468,13 @@ function updateCurrentDeviceView() {
   }
 
   // Pump State Button
-  if (currentDevice.is_pump_running) {
+  if (!currentDevice.is_online) {
+    pumpToggleButton.classList.remove('active');
+    pumpToggleButton.classList.add('disabled');
+    pumpButtonText.textContent = 'MÁY BƠM OFFLINE';
+    pumpStatePill.textContent = 'OFFLINE';
+    pumpStatePill.className = 'device-state-pill state-idle';
+  } else if (currentDevice.is_pump_running) {
     pumpToggleButton.classList.add('active');
     pumpButtonText.textContent = 'BƠM ĐANG CHẠY';
     pumpStatePill.textContent = 'ĐANG BƠM';
@@ -461,7 +492,10 @@ function updateCurrentDeviceView() {
 
   // Permissions Enforcement
   const isViewOnly = (currentDevice.role === 'MEMBER' && currentDevice.permission === 'VIEW_ONLY');
-  if (isViewOnly) {
+  if (!currentDevice.is_online) {
+    toggleAutoMode.disabled = true;
+    toggleChildLock.disabled = true;
+  } else if (isViewOnly) {
     viewOnlyAlert.style.display = 'flex';
     pumpToggleButton.classList.add('disabled');
     toggleAutoMode.disabled = true;

@@ -85,7 +85,14 @@ esp_err_t app_mqtt_init(const app_mqtt_config_t *config) {
       .credentials.username = config->username,
       .credentials.authentication.password = config->password,
       .credentials.client_id = config->client_id,
-      .session.keepalive = 60,
+      .session.keepalive = 15,
+      .session.last_will = {
+          .topic = "pump/family/status",
+          .msg = "{\"is_online\":false,\"state\":\"OFFLINE\"}",
+          .msg_len = 0,
+          .qos = 1,
+          .retain = 0,
+      },
   };
 
   s_mqtt_client = esp_mqtt_client_init(&mqtt_cfg);
