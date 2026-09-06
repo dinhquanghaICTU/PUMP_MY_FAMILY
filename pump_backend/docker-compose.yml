@@ -27,6 +27,7 @@ services:
       MQTT_USERNAME: "quanghaictu"
       MQTT_PASSWORD: "Zdinhquangha1234"
     volumes:
+      - ./app:/app/app
       - ./firmware:/app/firmware
     depends_on:
       - postgres_db
