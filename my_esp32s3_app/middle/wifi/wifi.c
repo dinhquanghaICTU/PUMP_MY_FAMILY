@@ -169,7 +169,7 @@ bool wifi_wait_for_connected(TickType_t timeout_ticks) {
   if (!s_wifi_event_group)
     return false;
   EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group,
-                                         WIFI_CONNECTED_BIT,
+                                         WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
                                          pdFALSE, pdFALSE, timeout_ticks);
   return (bits & WIFI_CONNECTED_BIT) != 0;
 }

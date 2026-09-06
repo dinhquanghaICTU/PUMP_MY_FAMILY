@@ -18,6 +18,7 @@ static char s_wifi_ssid[MAX_SSID_LEN] = {0};
 static char s_wifi_pass[MAX_PASS_LEN] = {0};
 static ble_wifi_config_cb_t s_config_cb = NULL;
 static uint8_t s_own_addr_type;
+static bool s_ble_stopping = false;
 bool connect_wifi = false;
 
 static int gatt_svr_chr_access_wifi(uint16_t conn_handle, uint16_t attr_handle,
@@ -111,19 +112,23 @@ static int ble_gap_event(struct ble_gap_event *event, void *arg) {
   case BLE_GAP_EVENT_CONNECT:
     ESP_LOGI(TAG, "Dien thoai da ket noi BLE! Status=%d",
              event->connect.status);
-    if (event->connect.status != 0) {
+    if (event->connect.status != 0 && !s_ble_stopping) {
       ble_app_advertise();
     }
     break;
 
   case BLE_GAP_EVENT_DISCONNECT:
     ESP_LOGI(TAG, "Dien thoai da ngat ket noi BLE -> Phat lai Advertising...");
-    ble_app_advertise();
+    if (!s_ble_stopping) {
+      ble_app_advertise();
+    }
     break;
 
   case BLE_GAP_EVENT_ADV_COMPLETE:
     ESP_LOGI(TAG, "Advertising complete -> Restarting");
-    ble_app_advertise();
+    if (!s_ble_stopping) {
+      ble_app_advertise();
+    }
     break;
 
   default:
@@ -187,6 +192,10 @@ esp_err_t ble_wifi_init(const char *device_name) {
   if (device_name && strlen(device_name) > 0) {
     strncpy(s_device_name, device_name, sizeof(s_device_name) - 1);
   }
+  s_ble_stopping = false;
+  memset(s_wifi_ssid, 0, sizeof(s_wifi_ssid));
+  memset(s_wifi_pass, 0, sizeof(s_wifi_pass));
+  connect_wifi = false;
 
   esp_err_t ret = nimble_port_init();
   if (ret != ESP_OK) {
@@ -217,6 +226,7 @@ esp_err_t ble_wifi_init(const char *device_name) {
 void ble_wifi_register_callback(ble_wifi_config_cb_t cb) { s_config_cb = cb; }
 
 esp_err_t ble_wifi_stop(void) {
+  s_ble_stopping = true;
   ESP_LOGI(TAG, "Stopping BLE...");
   return nimble_port_stop();
 }
@@ -229,6 +239,7 @@ void ble_wifi_get_credentials(char *ssid_out, char *pass_out) {
 }
 
 esp_err_t ble_wifi_deinit(void) {
+  s_ble_stopping = true;
   ESP_LOGI(TAG, "Stopping BLE...");
   ble_gap_adv_stop();
   int rc = nimble_port_stop();

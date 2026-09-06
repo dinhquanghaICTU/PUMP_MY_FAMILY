@@ -34,6 +34,9 @@ void m_state_machine_init(void) {
   g_state_machine.state_next = STATE_WIFI_CONFIG;
   g_state_machine.ble_config_wifi = false;
   g_state_machine.retry_count = 0;
+  connect_wifi = false;
+  memset(saved_ssid, 0, sizeof(saved_ssid));
+  memset(saved_pass, 0, sizeof(saved_pass));
 }
 
 void m_state_machine_set_state(state_t state) {
@@ -194,74 +197,68 @@ void m_state_machine_task(void *arg) {
     case STATE_WIFI_CONFIG:
       led_set_state(LED_STATE_BLE_CONFIG);
       /*
-        nếu chưa có ssid vs pass sẵn sẽ nhảy qua swwich
-        STATE_WIFI_CONNECT
+        Nếu có Wi-Fi lưu sẵn trong NVS VÀ số lần thử chưa vượt quá MAX_RETRY_COUNT:
+        Thử kết nối Wi-Fi từ NVS.
+        Nếu không có trong NVS HOẶC đã thử thất bại (sai pass / mất mạng):
+        Chuyển sang bật BLE phát quảng bá để người dùng cấu hình lại.
       */
-      if (get_ssid_password(saved_ssid, saved_pass)) {
+      if (g_state_machine.retry_count < MAX_RETRY_COUNT && strlen(saved_ssid) == 0 && get_ssid_password(saved_ssid, saved_pass)) {
         m_state_machine_set_state(STATE_WIFI_CONNECT);
         break;
       }
       /*
-        nếu chưa có ssid vs pass sẽ nhảy vào hàm nay gọi ble để config wwifi
-
+        Bật BLE phát quảng bá [PUMP_DEVICE_CONFIG] nếu chưa bật
       */
       if (!g_state_machine.ble_config_wifi) {
+        ESP_LOGI(TAG, "📶 [BLE CONFIG] Đang bật BLE phát quảng bá: [PUMP_DEVICE_CONFIG]...");
         ble_wifi_init("PUMP_DEVICE_CONFIG");
-        g_state_machine.ble_config_wifi =
-            true; // set cờ wifi bật lên true để lần sau vào loop không init lại
+        g_state_machine.ble_config_wifi = true;
+        connect_wifi = false;
         break;
       }
       /*
-        nếu có wifi sẵn rồi thì sẽ nhảy vào switch
-        STATE_WIFI_CONNECT
+        Khi người dùng dùng điện thoại nhập xong SSID + PASS -> Thử kết nối Wi-Fi
       */
       else if (connect_wifi) {
+        ESP_LOGI(TAG, "📱 [BLE CONFIG] Nhận cấu hình Wi-Fi mới từ điện thoại -> Đang kết nối...");
         m_state_machine_set_state(STATE_WIFI_CONNECT);
         break;
       }
       break;
     case STATE_WIFI_CONNECT: {
+      bool is_from_ble = g_state_machine.ble_config_wifi;
+
       /*
-        nếu lúc đầu lấy ssid vs pass từ ble nó sẽ nhảy vào đây để tắt ble đi
+        Nếu vừa cấu hình qua BLE -> Dừng BLE và lấy thông tin SSID/PASS vừa nhận
       */
-      if (g_state_machine.ble_config_wifi) {
+      if (is_from_ble) {
         vTaskDelay(pdMS_TO_TICKS(500));
         ble_wifi_deinit();
         ble_wifi_get_credentials(saved_ssid, saved_pass);
         g_state_machine.ble_config_wifi = false;
       }
+      connect_wifi = false; // Luôn reset cờ connect_wifi để tránh kích hoạt lặp
+
       /*
-        chỗ này nó lấy ssid vs pass wifi ở bên dưới flash
+        Nếu SSID vẫn rỗng thì thử đọc lại từ NVS
       */
       if (strlen(saved_ssid) == 0) {
         get_ssid_password(saved_ssid, saved_pass);
       }
-      /*
 
-        tạo phiên kết nối wwifi
-      */
       ESP_LOGI(TAG, "Ket noi Wi-Fi voi SSID: [%s]", saved_ssid);
       wifi_init();
 
       app_wifi_config_t sta_cfg = {.max_retry = 3, .retry_delay_ms = 2000};
       strncpy(sta_cfg.ssid, saved_ssid, sizeof(sta_cfg.ssid) - 1);
       strncpy(sta_cfg.password, saved_pass, sizeof(sta_cfg.password) - 1);
-      ESP_LOGE(TAG, "check debug ssid: [%s] , pass [%s]", sta_cfg.ssid,
-               sta_cfg.password);
       wifi_connect_sta(&sta_cfg);
-      /*
 
-        đoạn này nó chờ xem kết nối có thành công không
+      /*
+        Chờ kết nối Wi-Fi thành công
       */
       if (wifi_wait_for_connected(pdMS_TO_TICKS(15000))) {
-
-        ESP_LOGI(TAG,
-                 "connect wifi successfully  and save ssid and pass to flash");
-        /*
-
-         nếu thành công nó lưu ssid vs pass vào flash để mục đích lần sau
-         connect lại
-         */
+        ESP_LOGI(TAG, "connect wifi successfully and save ssid and pass to flash");
         if (strlen(saved_ssid) > 0) {
           esp_err_t err = nvs_save_wifi_credentials(saved_ssid, saved_pass);
           if (err == ESP_OK) {
@@ -273,15 +270,22 @@ void m_state_machine_task(void *arg) {
         g_state_machine.retry_count = 0;
         m_state_machine_set_state(STATE_WIFI_GOT_IP);
       } else {
-
-        /*
-          nếu kết nối wwifi không thành công nó sẽ nhảy vào đây tăng retry count
-          nếu qúa 3 lần nó sẽ nhảy ra swich STATE_WIFI_CONFIG để vào lại
-
-        */
-
-        ESP_LOGE(TAG, "Wi-Fi Connect Failed!");
+        ESP_LOGE(TAG, "🚨 Wi-Fi Connect Failed! (Sai mật khẩu hoặc không tìm thấy Wi-Fi)");
         g_state_machine.retry_count++;
+
+        // Ngắt kết nối Wi-Fi để dọn sạch tài nguyên
+        wifi_disconnect();
+
+        // Xóa sạch thông tin vừa thử bị sai để không thử lại pass sai này nữa
+        memset(saved_ssid, 0, sizeof(saved_ssid));
+        memset(saved_pass, 0, sizeof(saved_pass));
+        connect_wifi = false;
+
+        // Nếu vừa cấu hình từ BLE mà bị sai -> Đánh dấu đạt MAX_RETRY để quay thẳng về phát BLE
+        if (is_from_ble) {
+          g_state_machine.retry_count = MAX_RETRY_COUNT;
+        }
+
         m_state_machine_set_state(STATE_WIFI_CONNECT_FAILSE);
       }
       break;
@@ -409,7 +413,7 @@ void m_state_machine_task(void *arg) {
 
     case STATE_WIFI_CONNECT_FAILSE:
       led_set_state(LED_STATE_WIFI_DISCONNECTED);
-      ESP_LOGW(TAG, "Kết nối Wi-Fi thất bại -> Chờ 2 giây để thử lại...");
+      ESP_LOGW(TAG, "Kết nối Wi-Fi thất bại -> Chờ 2 giây rồi mở lại BLE để cấu hình lại...");
       vTaskDelay(pdMS_TO_TICKS(2000));
       m_state_machine_set_state(STATE_WIFI_CONFIG);
       break;
@@ -432,5 +436,6 @@ void m_state_machine_reset_wifi(void) {
   memset(saved_pass, 0, sizeof(saved_pass));
   connect_wifi = false;
   g_state_machine.ble_config_wifi = false;
+  g_state_machine.retry_count = MAX_RETRY_COUNT;
   m_state_machine_set_state(STATE_WIFI_CONFIG);
 }
