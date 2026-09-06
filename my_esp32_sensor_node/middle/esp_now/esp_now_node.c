@@ -105,12 +105,21 @@ static void on_data_recv(const esp_now_recv_info_t *recv_info,
 
   case OTA_PACKET_TYPE_START: {
     uint32_t total_size = 0;
-    memcpy(&total_size, ota_pkt->data, sizeof(uint32_t));
+    char target_ver[16] = {0};
+    if (ota_pkt->data_len >= sizeof(uint32_t)) {
+      memcpy(&total_size, ota_pkt->data, sizeof(uint32_t));
+      if (ota_pkt->data_len > sizeof(uint32_t)) {
+        size_t ver_len = ota_pkt->data_len - sizeof(uint32_t);
+        if (ver_len > sizeof(target_ver) - 1) ver_len = sizeof(target_ver) - 1;
+        memcpy(target_ver, ota_pkt->data + sizeof(uint32_t), ver_len);
+        target_ver[ver_len] = '\0';
+      }
+    }
 
     s_ota_trigger_received = true;
     s_ota_finishing = false;
-    ESP_LOGW(TAG, "🚀 [OTA BỂ NƯỚC] Bắt đầu phiên nạp! Size: %lu bytes (Kênh: %d)",
-             (unsigned long)total_size, s_listen_channel);
+    ESP_LOGW(TAG, "🚀 [OTA BỂ NƯỚC] Bắt đầu phiên nạp! Size: %lu bytes | Version mục tiêu: [%s] (Kênh: %d)",
+             (unsigned long)total_size, target_ver[0] ? target_ver : "N/A", s_listen_channel);
 
     // Dành toàn quyền 100% cho OTA: Tắt toàn bộ tiết kiệm điện, khóa cứng radio vào kênh Master
     esp_wifi_set_ps(WIFI_PS_NONE);
@@ -119,7 +128,7 @@ static void on_data_recv(const esp_now_recv_info_t *recv_info,
     esp_wifi_set_promiscuous(false);
 
     node_state_machine_set_state(NODE_STATE_OTA_UPDATING);
-    esp_err_t start_err = ota_node_start(total_size);
+    esp_err_t start_err = ota_node_start(total_size, target_ver);
     if (start_err != ESP_OK) {
       esp_now_node_send_ota_response(OTA_PACKET_TYPE_FAIL, start_err, esp_err_to_name(start_err));
       return;

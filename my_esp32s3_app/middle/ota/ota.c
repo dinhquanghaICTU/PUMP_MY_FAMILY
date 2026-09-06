@@ -281,13 +281,17 @@ static void ota_tank_esp_now_task(void *pvParameter) {
   }
   ESP_LOGI(TAG, "Kích thước file firmware Bể Nước: %d bytes", content_length);
 
+  uint16_t ver_len = (uint16_t)strlen(s_current_ota_cfg.version);
   ota_esp_now_packet_t pkt_start = {
       .type = OTA_PACKET_TYPE_START,
       .chunk_index = 0,
-      .data_len = sizeof(uint32_t),
+      .data_len = sizeof(uint32_t) + ver_len,
   };
   uint32_t total_sz = (uint32_t)content_length;
   memcpy(pkt_start.data, &total_sz, sizeof(uint32_t));
+  if (ver_len > 0) {
+    memcpy(pkt_start.data + sizeof(uint32_t), s_current_ota_cfg.version, ver_len);
+  }
 
   // 1. Handshake với Node Bể Nước - Chờ Node ACK sẵn sàng nhận OTA
   bool tank_ready = false;
@@ -435,8 +439,6 @@ static void ota_tank_esp_now_task(void *pvParameter) {
 
   // Chờ 300ms
   vTaskDelay(pdMS_TO_TICKS(300));
-
-  // 3. Bắn gói END sang Node Bể Nước để kết thúc và Reboot
   ota_esp_now_packet_t pkt_end = {
       .type = OTA_PACKET_TYPE_END,
       .chunk_index = chunk_idx,

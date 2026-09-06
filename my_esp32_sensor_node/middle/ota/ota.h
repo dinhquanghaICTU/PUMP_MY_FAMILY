@@ -26,7 +26,7 @@ typedef struct __attribute__((packed)) {
 
 esp_err_t ota_node_init(void);
 
-esp_err_t ota_node_start(size_t total_size);
+esp_err_t ota_node_start(size_t total_size, const char *target_version);
 
 esp_err_t ota_node_write_chunk(uint32_t chunk_index, const uint8_t *data,
                                size_t length);

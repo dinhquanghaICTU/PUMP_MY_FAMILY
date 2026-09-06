@@ -9,6 +9,8 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "nvs.h"
+#include "nvs_flash.h"
 #include "state_machine.h"
 #include <string.h>
 
@@ -23,11 +25,23 @@ static uint32_t s_expected_chunk_index = 0;
 static int64_t s_last_activity_time_ms = 0;
 
 static char s_node_version[16] = {0};
+static char s_ota_target_ver[16] = {0};
 
 const char *ota_node_get_version(void) {
   if (s_node_version[0] != '\0') {
     return s_node_version;
   }
+  // 1. Ưu tiên đọc phiên bản từ Flash NVS
+  nvs_handle_t nvs;
+  if (nvs_open("node_cfg", NVS_READONLY, &nvs) == ESP_OK) {
+    size_t len = sizeof(s_node_version);
+    if (nvs_get_str(nvs, "fw_ver", s_node_version, &len) == ESP_OK && len > 1) {
+      nvs_close(nvs);
+      return s_node_version;
+    }
+    nvs_close(nvs);
+  }
+  // 2. Nếu chưa có trong Flash thì đọc từ esp_app_desc
   const esp_app_desc_t *app_desc = esp_app_get_description();
   if (app_desc && strlen(app_desc->version) > 0) {
     strncpy(s_node_version, app_desc->version, sizeof(s_node_version) - 1);
@@ -64,7 +78,7 @@ esp_err_t ota_node_init(void) {
   return ESP_OK;
 }
 
-esp_err_t ota_node_start(size_t total_size) {
+esp_err_t ota_node_start(size_t total_size, const char *target_version) {
   if (s_is_updating && s_ota_handle != 0) {
     esp_ota_abort(s_ota_handle);
     s_ota_handle = 0;
@@ -73,6 +87,14 @@ esp_err_t ota_node_start(size_t total_size) {
   s_total_bytes_written = 0;
   s_last_chunk_index = 0;
   s_expected_chunk_index = 0;
+
+  if (target_version && strlen(target_version) > 0) {
+    strncpy(s_ota_target_ver, target_version, sizeof(s_ota_target_ver) - 1);
+    s_ota_target_ver[sizeof(s_ota_target_ver) - 1] = '\0';
+    ESP_LOGI(TAG, "🎯 Ghi nhận phiên bản mục tiêu từ Master: [%s]", s_ota_target_ver);
+  } else {
+    s_ota_target_ver[0] = '\0';
+  }
 
   s_update_partition = esp_ota_get_next_update_partition(NULL);
   if (!s_update_partition) {
@@ -167,6 +189,18 @@ esp_err_t ota_node_finish(void) {
     vTaskDelay(pdMS_TO_TICKS(600));
     esp_restart();
     return err;
+  }
+
+  // Lưu phiên bản mới vào Flash NVS nếu có
+  if (strlen(s_ota_target_ver) > 0) {
+    nvs_handle_t nvs;
+    if (nvs_open("node_cfg", NVS_READWRITE, &nvs) == ESP_OK) {
+      nvs_set_str(nvs, "fw_ver", s_ota_target_ver);
+      nvs_commit(nvs);
+      nvs_close(nvs);
+      ESP_LOGI(TAG, "💾 [NVS FLASH] Đã lưu phiên bản mới vào Flash: [%s]", s_ota_target_ver);
+    }
+    strncpy(s_node_version, s_ota_target_ver, sizeof(s_node_version) - 1);
   }
 
   esp_now_node_send_ota_response(OTA_PACKET_TYPE_SUCCESS, 0, "OTA_SUCCESS");
