@@ -1052,7 +1052,11 @@ async function handleTriggerOta(e) {
             frozenSeconds++;
           }
 
-          if (otaProgressBar) otaProgressBar.style.width = `${pct}%`;
+          if (otaProgressBar) {
+            otaProgressBar.style.width = `${pct}%`;
+            otaProgressBar.style.background = 'linear-gradient(90deg, #00f2fe 0%, #38bdf8 50%, #4facfe 100%)';
+            otaProgressBar.style.boxShadow = '0 0 10px rgba(0,242,254,0.6)';
+          }
           if (otaPercentText) otaPercentText.textContent = `${pct}%`;
 
           if (progRes.bytes && progRes.total) {
@@ -1069,6 +1073,7 @@ async function handleTriggerOta(e) {
             if (otaProgressBar) {
               otaProgressBar.style.width = `${Math.min(100, Math.max(5, currentWater))}%`;
               otaProgressBar.style.background = 'linear-gradient(90deg, #f59e0b, #d97706)';
+              otaProgressBar.style.boxShadow = '0 0 10px rgba(245,158,11,0.6)';
             }
             if (otaPercentText) otaPercentText.textContent = `Nước: ${currentWater.toFixed(0)}% / ${targetWater}%`;
             if (otaSpinner) otaSpinner.style.display = 'inline-block';
@@ -1079,7 +1084,8 @@ async function handleTriggerOta(e) {
 
           // Phục hồi lại màu thanh tiến trình bình thường khi thoát trạng thái pending
           if (progRes.status === 'in_progress' && otaProgressBar) {
-            otaProgressBar.style.background = 'linear-gradient(90deg, var(--primary), #3b82f6)';
+            otaProgressBar.style.background = 'linear-gradient(90deg, #00f2fe 0%, #38bdf8 50%, #4facfe 100%)';
+            otaProgressBar.style.boxShadow = '0 0 10px rgba(0,242,254,0.6)';
           }
 
           // 1. Nếu nhận được báo cáo thất bại hoặc Rollback thực sự từ thiết bị

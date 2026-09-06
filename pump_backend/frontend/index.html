@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="css/style.css?v=6">
+  <link rel="stylesheet" href="css/style.css?v=7">
 </head>
 <body>
   <!-- Ambient Cyber Glows -->
@@ -543,8 +543,8 @@
                     </span>
                     <span id="otaPercentText" style="font-size: 1.15rem; font-weight: 800; color: var(--accent-cyan);">0%</span>
                   </div>
-                  <div class="progress-track" style="width: 100%; height: 10px; background: rgba(255,255,255,0.08); border-radius: 6px; overflow: hidden; border: 1px solid rgba(255,255,255,0.12);">
-                    <div id="otaProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #00f2fe, #4facfe); border-radius: 6px; transition: width 0.3s ease;"></div>
+                  <div class="progress-track" style="width: 100%; height: 14px; background: rgba(15,23,42,0.8); border-radius: 8px; overflow: hidden; border: 1px solid rgba(0,242,254,0.25); box-shadow: inset 0 2px 4px rgba(0,0,0,0.6); position: relative;">
+                    <div id="otaProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #00f2fe 0%, #38bdf8 50%, #4facfe 100%); border-radius: 8px; transition: width 0.3s ease; box-shadow: 0 0 10px rgba(0,242,254,0.5);"></div>
                   </div>
                   <div id="otaDetailStats" style="font-size: 0.8rem; color: var(--text-muted); display: flex; justify-content: space-between; width: 100%;">
                     <span id="otaBytesInfo">0 KB / 0 KB</span>
@@ -835,6 +835,6 @@
     <span class="toast-message" id="toastMessage">Thông báo</span>
   </div>
 
-  <script src="js/app.js?v=17"></script>
+  <script src="js/app.js?v=18"></script>
 </body>
 </html>
