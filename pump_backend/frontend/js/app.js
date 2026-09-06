@@ -990,6 +990,7 @@ async function handleTriggerOta(e) {
 
     let pollCount = 0;
     let hasReachedReboot = false;
+    let rebootWaitCount = 0;
     let lastProgressPct = -1;
     let lastProgressBytes = -1;
     let frozenSeconds = 0;
@@ -1059,7 +1060,7 @@ async function handleTriggerOta(e) {
           }
 
           // 2. Khi thiết bị đã ghi flash xong 100% và đang reboot
-          if (pct >= 100 || progRes.status === 'rebooting' || progRes.status === 'success') {
+          if (pct >= 100 || progRes.status === 'rebooting') {
             hasReachedReboot = true;
             if (otaProgressBar) {
               otaProgressBar.style.width = '100%';
@@ -1072,6 +1073,10 @@ async function handleTriggerOta(e) {
         }
       } catch (e) {
         // bỏ qua lỗi polling mạng tạm thời
+      }
+
+      if (hasReachedReboot) {
+        rebootWaitCount++;
       }
 
       // 3. Kiểm tra thông tin thiết bị sau khi reboot
@@ -1088,25 +1093,27 @@ async function handleTriggerOta(e) {
         return; // Để nhánh failed xử lý
       }
 
-      // XÁC MINH PHIÊN BẢN (VERSION VERIFICATION):
-      // Sau 3 giây polling (để loại trừ cache cũ lúc mới bấm nút):
-      // Nếu thiết bị báo lên phiên bản mới khớp với version cần nạp, hoặc version đã thay đổi khác initialVer:
-      // BẤT KỂ thanh % trên web đang ở đâu (kể cả 30%, 50% do delay MQTT), lập tức ĐẨY THẲNG LÊN 100% VÀ BÁO THÀNH CÔNG!
+      // XÁC MINH HOÀN TẤT OTA:
       const cleanVer = (v) => String(v || '').trim().toLowerCase().replace(/^v/, '');
       const curClean = cleanVer(currentVer);
       const tgtClean = cleanVer(version);
       const initClean = cleanVer(initialVer);
 
-      const isTargetDifferent = Boolean(tgtClean && initClean && tgtClean !== initClean);
+      // Điều kiện 1: Phiên bản trên thiết bị đã khớp với version mục tiêu hoặc đã khác version ban đầu
       const isVerMatched = Boolean(
         pollCount >= 3 && curClean && (
-          (isTargetDifferent && curClean === tgtClean) ||
-          (isTargetDifferent && curClean !== initClean)
+          curClean === tgtClean || 
+          (initClean && curClean !== initClean)
         )
       );
 
+      // Điều kiện 2: Backend/MQTT báo rõ ràng 'success'
       const isStatusSuccess = Boolean(progRes && progRes.status === 'success');
-      const isOtaSuccess = isVerMatched || (isStatusSuccess && (pct >= 100 || hasReachedReboot));
+
+      // Điều kiện 3: Thiết bị đã nạp xong 100%, đã qua nhịp chờ reboot (>= 3s) và thiết bị đã online phản hồi dữ liệu
+      const isRebootDone = Boolean(hasReachedReboot && rebootWaitCount >= 3 && currentDevice);
+
+      const isOtaSuccess = isVerMatched || isStatusSuccess || isRebootDone;
 
       if (isOtaSuccess) {
         // Kiểm tra lại lần cuối xem có cờ lỗi không

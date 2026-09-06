@@ -41,6 +41,8 @@ const char *ota_get_current_version(void);
 
 const char *ota_get_tank_version(void);
 
+void ota_set_tank_version(const char *ver);
+
 bool ota_is_updating(void);
 
 #endif // __OTA_H__

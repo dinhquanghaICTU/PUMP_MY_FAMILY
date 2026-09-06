@@ -1,4 +1,5 @@
 #include "ota.h"
+#include "esp_app_desc.h"
 #include "esp_app_format.h"
 #include "esp_log.h"
 #include "esp_now_node.h"
@@ -9,6 +10,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "state_machine.h"
+#include <string.h>
 
 static const char *TAG = "MIDDLE_OTA_NODE";
 
@@ -19,6 +21,21 @@ static size_t s_total_bytes_written = 0;
 static uint32_t s_last_chunk_index = 0;
 static uint32_t s_expected_chunk_index = 0;
 static int64_t s_last_activity_time_ms = 0;
+
+static char s_node_version[16] = {0};
+
+const char *ota_node_get_version(void) {
+  if (s_node_version[0] != '\0') {
+    return s_node_version;
+  }
+  const esp_app_desc_t *app_desc = esp_app_get_description();
+  if (app_desc && strlen(app_desc->version) > 0) {
+    strncpy(s_node_version, app_desc->version, sizeof(s_node_version) - 1);
+  } else {
+    strncpy(s_node_version, "1.0.0", sizeof(s_node_version) - 1);
+  }
+  return s_node_version;
+}
 
 esp_err_t ota_node_init(void) {
   const esp_partition_t *running = esp_ota_get_running_partition();

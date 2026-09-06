@@ -10,6 +10,7 @@ typedef struct __attribute__((packed)) {
   uint32_t packet_id;
   float distance_cm;
   float battery_volt;
+  char fw_version[16];
 } SensorData_t;
 
 esp_err_t node_esp_init(void);

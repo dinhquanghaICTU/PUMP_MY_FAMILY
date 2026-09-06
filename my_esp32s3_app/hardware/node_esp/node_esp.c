@@ -85,12 +85,25 @@ static void on_esp_now_recv_cb(const esp_now_recv_info_t *recv_info,
     }
   }
 
-  // 2. Xử lý gói tin cảm biến SensorData_t
-  if (len == sizeof(SensorData_t)) {
+  // 2. Xử lý gói tin cảm biến SensorData_t (hỗ trợ cả chuẩn mới 28 bytes chứa version và chuẩn cũ 12 bytes)
+  if (len == sizeof(SensorData_t) || len == 12) {
+    if (len == sizeof(SensorData_t)) {
+      memcpy(&g_recv_data, data, sizeof(SensorData_t));
+    } else {
+      memcpy(&g_recv_data, data, 12);
+      strncpy(g_recv_data.fw_version, "1.0.0", sizeof(g_recv_data.fw_version) - 1);
+    }
+
+    // Tự động ghi nhận phiên bản Bể Nước do chính chip phần cứng báo lên
+    if (strlen(g_recv_data.fw_version) > 0) {
+      ota_set_tank_version(g_recv_data.fw_version);
+    }
+
     // Nếu đang trong giai đoạn chờ Bể Nước xác thực Flash & Reboot sau OTA:
     // Việc nhận được gói tin cảm biến chính là minh chứng 100% Node Bể Nước đã nạp xong và boot thành công!
     if (s_tank_ota_sem && s_tank_ota_final_resp == TANK_OTA_RESP_NONE) {
-      ESP_LOGI(TAG, "🎉 [NODE BỂ NƯỚC ĐÃ REBOOT & BẮN CẢM BIẾN] -> Xác nhận OTA BỂ NƯỚC THÀNH CÔNG 100%%!");
+      ESP_LOGI(TAG, "🎉 [NODE BỂ NƯỚC ĐÃ REBOOT & BẮN CẢM BIẾN] -> Xác nhận OTA BỂ NƯỚC THÀNH CÔNG 100%%! Firmware đang chạy: [%s]",
+               g_recv_data.fw_version);
       s_tank_ota_final_resp = TANK_OTA_RESP_SUCCESS;
       xSemaphoreGive(s_tank_ota_sem);
     }
@@ -123,7 +136,6 @@ static void on_esp_now_recv_cb(const esp_now_recv_info_t *recv_info,
       }
     }
 
-    memcpy(&g_recv_data, data, sizeof(SensorData_t));
     g_has_data = true;
     g_last_recv_time_us = esp_timer_get_time();
     g_total_received++;
@@ -141,10 +153,10 @@ static void on_esp_now_recv_cb(const esp_now_recv_info_t *recv_info,
     int rssi = recv_info->rx_ctrl->rssi;
 
     ESP_LOGI(TAG,
-             "[GÓI #%lu] | Nước: %.2f cm | Pin: %.2fV | RSSI: %d dBm | Rớt: "
+             "[GÓI #%lu] | Nước: %.2f cm | Pin: %.2fV | Ver: [%s] | RSSI: %d dBm | Rớt: "
              "%.1f%% (Tổng nhận: %lu / Mất: %lu)",
              (unsigned long)g_recv_data.packet_id, g_recv_data.distance_cm,
-             g_recv_data.battery_volt, rssi, loss_rate,
+             g_recv_data.battery_volt, g_recv_data.fw_version, rssi, loss_rate,
              (unsigned long)g_total_received, (unsigned long)g_total_lost);
 
     // Bắn ACK phản hồi cho Node Bể Nước để khóa kênh Wi-Fi và MAC của Master -> Tiết kiệm 92% pin

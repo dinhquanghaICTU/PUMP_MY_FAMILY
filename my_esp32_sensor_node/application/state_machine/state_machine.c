@@ -11,6 +11,7 @@
 #include "led.h"
 #include "ota.h"
 #include <math.h>
+#include <string.h>
 
 static const char *TAG = "NODE_STATE_MACHINE";
 
@@ -169,6 +170,7 @@ void node_state_machine_task(void *pvParam) {
           .distance_cm = g_node_fsm.current_distance_cm,
           .battery_volt = g_node_fsm.current_battery_volt,
       };
+      strncpy(packet.fw_version, ota_node_get_version(), sizeof(packet.fw_version) - 1);
 
       led_on();
       esp_err_t send_err = esp_now_node_send(&packet);
@@ -176,9 +178,9 @@ void node_state_machine_task(void *pvParam) {
 
       if (send_err == ESP_OK) {
         ESP_LOGI(TAG,
-                 " [BẮN ESP-NOW #%lu] -> Khoảng cách: %.1f cm | Pin: %.2fV",
+                 " [BẮN ESP-NOW #%lu] -> Khoảng cách: %.1f cm | Pin: %.2fV | Ver: [%s]",
                  (unsigned long)packet.packet_id, packet.distance_cm,
-                 packet.battery_volt);
+                 packet.battery_volt, packet.fw_version);
       } else {
         ESP_LOGE(TAG, "[LỖI ESP-NOW] Không thể gửi gói tin #%lu",
                  (unsigned long)packet.packet_id);

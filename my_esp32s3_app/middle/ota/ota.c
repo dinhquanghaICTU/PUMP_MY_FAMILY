@@ -65,6 +65,21 @@ const char *ota_get_tank_version(void) {
   return s_tank_ver_buf;
 }
 
+void ota_set_tank_version(const char *ver) {
+  if (!ver || strlen(ver) == 0) return;
+  if (strncmp(s_tank_ver_buf, ver, sizeof(s_tank_ver_buf)) != 0) {
+    strncpy(s_tank_ver_buf, ver, sizeof(s_tank_ver_buf) - 1);
+    s_tank_ver_buf[sizeof(s_tank_ver_buf) - 1] = '\0';
+    nvs_handle_t nvs;
+    if (nvs_open("system_cfg", NVS_READWRITE, &nvs) == ESP_OK) {
+      nvs_set_str(nvs, "tank_ver", s_tank_ver_buf);
+      nvs_commit(nvs);
+      nvs_close(nvs);
+    }
+    ESP_LOGI(TAG, "💾 [CẬP NHẬT VERSION BỂ NƯỚC] Phiên bản Bể Nước hiện tại: [%s]", s_tank_ver_buf);
+  }
+}
+
 esp_err_t ota_parse_json(const char *json_str, ota_config_t *out_cfg) {
   if (!json_str || !out_cfg) {
     return ESP_ERR_INVALID_ARG;
@@ -430,22 +445,19 @@ static void ota_tank_esp_now_task(void *pvParameter) {
   esp_http_client_cleanup(client);
 
   if (tank_res == TANK_OTA_RESP_SUCCESS) {
-    ESP_LOGI(TAG, "🎉 [XÁC NHẬN TỪ BỂ NƯỚC] Flash hợp lệ! Cập nhật phiên bản mới: [%s]", s_current_ota_cfg.version);
-    if (strlen(s_current_ota_cfg.version) > 0) {
-      nvs_handle_t nvs;
-      if (nvs_open("system_cfg", NVS_READWRITE, &nvs) == ESP_OK) {
-        nvs_set_str(nvs, "tank_ver", s_current_ota_cfg.version);
-        nvs_commit(nvs);
-        nvs_close(nvs);
-      }
-      strncpy(s_tank_ver_buf, s_current_ota_cfg.version, sizeof(s_tank_ver_buf) - 1);
+    SensorData_t latest_node_data = {0};
+    const char *final_tank_ver = s_current_ota_cfg.version;
+    if (node_esp_get_latest_data(&latest_node_data) && strlen(latest_node_data.fw_version) > 0) {
+      final_tank_ver = latest_node_data.fw_version;
     }
+    ota_set_tank_version(final_tank_ver);
+    ESP_LOGI(TAG, "🎉 [XÁC NHẬN TỪ BỂ NƯỚC] Flash hợp lệ! Cập nhật phiên bản mới: [%s]", final_tank_ver);
     char stat_buf[256];
     snprintf(stat_buf, sizeof(stat_buf),
              "{\"event\":\"ota_progress\",\"target\":\"esp32_tank\",\"status\":"
              "\"success\",\"percent\":100,\"version\":\"%s\",\"message\":\"Cập "
-             "nhật Bể Nước thành công 100%%! Bể Nước đang khởi động lại...\"}",
-             s_current_ota_cfg.version);
+             "nhật Bể Nước thành công 100%%! Node Bể Nước đã chạy ok với firmware v%s\"}",
+             final_tank_ver, final_tank_ver);
     app_mqtt_publish("pump/family/status", stat_buf, 1, 0);
   } else if (tank_res == TANK_OTA_RESP_FAIL) {
     ESP_LOGE(TAG, "❌ [BỂ NƯỚC TỪ CHỐI FIRMWARE] Lỗi: %s (Có thể sai chip ESP32 hoặc file lỗi)", tank_err);

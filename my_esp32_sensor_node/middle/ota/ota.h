@@ -41,4 +41,6 @@ bool ota_node_is_updating(void);
 
 int64_t ota_node_get_last_activity_time(void);
 
+const char *ota_node_get_version(void);
+
 #endif // __OTA_NODE_H__
