@@ -9,6 +9,7 @@
 #include "ota.h"
 #include "state_machine.h"
 #include "wifi.h"
+#include "esp_sleep.h"
 #include <stdio.h>
 
 static const char *TAG = "SENSOR_NODE_MAIN";
@@ -36,7 +37,11 @@ void app_main(void) {
   // khởi tạo state machine
   node_state_machine_init();
 
-  led_blink(3, 100);
+  // Chỉ chớp LED 3 lần khi khởi động nguội (Cold Boot), bỏ qua khi thức dậy từ Deep Sleep để tiết kiệm pin tối đa
+  if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_UNDEFINED) {
+    led_blink(3, 100);
+  }
+
   // khởi tạo các task của node
   xTaskCreate(node_state_machine_task, "node_fsm_task", 4096, NULL, 5, NULL);
 }

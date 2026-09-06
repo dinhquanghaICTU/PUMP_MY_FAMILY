@@ -280,10 +280,10 @@ esp_err_t esp_now_node_send_ota_response(uint8_t type, uint32_t code, const char
   }
 
   const uint8_t *target = s_has_master_mac ? s_master_mac : s_broadcast_mac;
-  // Bắn 3 lần lặp lại để chắc chắn Master nhận được
-  for (int i = 0; i < 3; i++) {
+  // Bắn 5 lần lặp lại để chắc chắn Master nhận được
+  for (int i = 0; i < 5; i++) {
     esp_now_send(target, (const uint8_t *)&resp_pkt, sizeof(ota_esp_now_packet_t));
-    vTaskDelay(pdMS_TO_TICKS(40));
+    vTaskDelay(pdMS_TO_TICKS(60));
   }
   return ESP_OK;
 }
@@ -309,4 +309,8 @@ bool esp_now_node_wait_for_ota_trigger(uint32_t wait_ms) {
     vTaskDelay(pdMS_TO_TICKS(10));
   }
   return (s_ota_trigger_received || ota_node_is_updating());
+}
+
+void esp_now_node_reset_ota_trigger(void) {
+  s_ota_trigger_received = false;
 }

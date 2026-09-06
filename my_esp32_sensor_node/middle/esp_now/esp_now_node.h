@@ -27,4 +27,7 @@ bool esp_now_node_wait_for_ota_trigger(uint32_t wait_ms);
 // Kiểm tra xem đã khóa được kênh và MAC của Master chưa
 bool esp_now_node_is_master_locked(void);
 
+// Xóa cờ chờ OTA khi kết thúc hoặc thất bại
+void esp_now_node_reset_ota_trigger(void);
+
 #endif // __ESP_NOW_NODE_H__

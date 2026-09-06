@@ -63,4 +63,16 @@ void m_pump_controler_clear_error(void);
 
 float m_pump_controler_calculate_percent(float distance_cm);
 
+// Kiểm tra bể nước đã đầy hay chưa (current_percent >= max_water_percent && !is_pump_on)
+bool m_pump_controler_is_tank_full(void);
+
+// Đưa yêu cầu OTA vào hàng đợi chờ bơm đầy nước trong chế độ AUTO
+void m_pump_controler_queue_ota(const void *ota_cfg);
+
+// Kiểm tra xem có lệnh OTA đang chờ bơm đầy nước hay không
+bool m_pump_controler_has_pending_ota(void);
+
+// Hủy lệnh OTA đang chờ (nếu có)
+void m_pump_controler_cancel_pending_ota(void);
+
 #endif // __M_PUMP_CONTROLER_H__

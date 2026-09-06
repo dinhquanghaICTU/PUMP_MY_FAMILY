@@ -87,6 +87,14 @@ static void on_esp_now_recv_cb(const esp_now_recv_info_t *recv_info,
 
   // 2. Xử lý gói tin cảm biến SensorData_t
   if (len == sizeof(SensorData_t)) {
+    // Nếu đang trong giai đoạn chờ Bể Nước xác thực Flash & Reboot sau OTA:
+    // Việc nhận được gói tin cảm biến chính là minh chứng 100% Node Bể Nước đã nạp xong và boot thành công!
+    if (s_tank_ota_sem && s_tank_ota_final_resp == TANK_OTA_RESP_NONE) {
+      ESP_LOGI(TAG, "🎉 [NODE BỂ NƯỚC ĐÃ REBOOT & BẮN CẢM BIẾN] -> Xác nhận OTA BỂ NƯỚC THÀNH CÔNG 100%%!");
+      s_tank_ota_final_resp = TANK_OTA_RESP_SUCCESS;
+      xSemaphoreGive(s_tank_ota_sem);
+    }
+
     // Nếu đang trong quá trình nạp OTA thì bỏ qua toàn bộ gói tin cảm biến
     if (ota_is_updating()) {
       return;

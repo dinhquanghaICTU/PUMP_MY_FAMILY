@@ -70,8 +70,27 @@ def on_message(client, userdata, msg):
                 if not data.get("event"):
                     if "version" in data and data["version"]:
                         device.firmware_version = str(data["version"])
+                        # Nếu đang OTA tủ điện và version gửi lên khớp với target version -> Đẩy OTA thành công 100%!
+                        if current_ota_progress.get("target") == "esp32s3_cabinet" and current_ota_progress.get("version"):
+                            exp_ver = str(current_ota_progress["version"]).lstrip("v").strip()
+                            got_ver = str(data["version"]).lstrip("v").strip()
+                            if exp_ver == got_ver and current_ota_progress.get("status") in ("in_progress", "rebooting", "pending_wait_full"):
+                                current_ota_progress["status"] = "success"
+                                current_ota_progress["percent"] = 100
+                                current_ota_progress["message"] = f"Xác nhận qua Telemetry: Tủ Điện đã kích hoạt firmware v{got_ver}!"
+                                print(f"🎉 [OTA AUTO SUCCESS] S3 Telemetry xác nhận version v{got_ver} khớp target!")
+
                     if "tank_version" in data and data["tank_version"]:
                         device.tank_firmware_version = str(data["tank_version"])
+                        # Nếu đang OTA bể nước và tank_version gửi lên khớp với target version -> Đẩy OTA thành công 100%!
+                        if current_ota_progress.get("target") in ("esp32_tank", "node_tank") and current_ota_progress.get("version"):
+                            exp_ver = str(current_ota_progress["version"]).lstrip("v").strip()
+                            got_ver = str(data["tank_version"]).lstrip("v").strip()
+                            if exp_ver == got_ver and current_ota_progress.get("status") in ("in_progress", "rebooting", "pending_wait_full"):
+                                current_ota_progress["status"] = "success"
+                                current_ota_progress["percent"] = 100
+                                current_ota_progress["message"] = f"Xác nhận qua Telemetry: Node Bể Nước đã kích hoạt firmware v{got_ver}!"
+                                print(f"🎉 [OTA AUTO SUCCESS] Node Bể Telemetry xác nhận version v{got_ver} khớp target!")
                 session.add(device)
                 session.commit()
 
@@ -86,6 +105,8 @@ def on_message(client, userdata, msg):
             current_ota_progress["bytes"] = data.get("bytes", 0)
             current_ota_progress["total"] = data.get("total", 0)
             current_ota_progress["version"] = data.get("version")
+            current_ota_progress["water_percent"] = data.get("water_percent")
+            current_ota_progress["target_percent"] = data.get("target_percent")
             current_ota_progress["error"] = data.get("error")
             current_ota_progress["message"] = data.get("message")
             current_ota_progress["timestamp"] = int(time.time())

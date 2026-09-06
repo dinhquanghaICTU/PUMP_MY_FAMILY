@@ -419,15 +419,15 @@ static void ota_tank_esp_now_task(void *pvParameter) {
     vTaskDelay(pdMS_TO_TICKS(100));
   }
 
-  esp_http_client_close(client);
-  esp_http_client_cleanup(client);
-
   ESP_LOGI(TAG,
            "📦 Đã gửi toàn bộ firmware sang Node Bể Nước (%d bytes). Đang chờ Bể Nước xác thực Flash...",
            (int)total_sent);
 
   char tank_err[64] = "TIMEOUT";
   tank_ota_response_t tank_res = node_esp_wait_tank_ota_finish(15000, tank_err, sizeof(tank_err));
+
+  esp_http_client_close(client);
+  esp_http_client_cleanup(client);
 
   if (tank_res == TANK_OTA_RESP_SUCCESS) {
     ESP_LOGI(TAG, "🎉 [XÁC NHẬN TỪ BỂ NƯỚC] Flash hợp lệ! Cập nhật phiên bản mới: [%s]", s_current_ota_cfg.version);

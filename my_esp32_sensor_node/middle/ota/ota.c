@@ -132,7 +132,10 @@ esp_err_t ota_node_finish(void) {
     // Bắn gói tin FAIL về cho Master Tủ Điện
     esp_now_node_send_ota_response(OTA_PACKET_TYPE_FAIL, (uint32_t)err,
                                    esp_err_to_name(err));
-    node_state_machine_set_state(NODE_STATE_IDLE);
+    esp_now_node_reset_ota_trigger();
+    ESP_LOGW(TAG, "🔄 Khởi động lại chip sau 600ms để giữ nguyên Firmware cũ và dọn sạch RAM...");
+    vTaskDelay(pdMS_TO_TICKS(600));
+    esp_restart();
     return err;
   }
 
@@ -142,7 +145,10 @@ esp_err_t ota_node_finish(void) {
              esp_err_to_name(err));
     esp_now_node_send_ota_response(OTA_PACKET_TYPE_FAIL, (uint32_t)err,
                                    "SET_BOOT_FAILED");
-    node_state_machine_set_state(NODE_STATE_IDLE);
+    esp_now_node_reset_ota_trigger();
+    ESP_LOGW(TAG, "🔄 Khởi động lại chip sau 600ms để phục hồi Firmware cũ...");
+    vTaskDelay(pdMS_TO_TICKS(600));
+    esp_restart();
     return err;
   }
 
@@ -163,6 +169,7 @@ void ota_node_abort(void) {
   }
   s_is_updating = false;
   s_last_activity_time_ms = 0;
+  esp_now_node_reset_ota_trigger();
   ESP_LOGW(TAG, "Đã hủy phiên OTA và quay về đo đạc!");
   node_state_machine_set_state(NODE_STATE_IDLE);
 }

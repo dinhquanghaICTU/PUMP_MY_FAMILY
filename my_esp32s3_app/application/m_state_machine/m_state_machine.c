@@ -84,9 +84,21 @@ static void on_mqtt_message_received(const char *topic, int topic_len,
 }
     */
     if (ota_parse_json(payload_str, &ota_cfg) == ESP_OK) {
-      ESP_LOGI(TAG, "Nhận lệnh OTA hợp lệ! Bắt đầu nâng cấp firmware...");
-      m_state_machine_set_state(STATE_OTA);
-      ota_start(&ota_cfg);
+      const m_controler_pump_t *pump_ctx = m_pump_controler_get_context();
+      if (pump_ctx && pump_ctx->mode == MODE_PUMP_AUTO && !m_pump_controler_is_tank_full()) {
+        ESP_LOGW(TAG, "🤖 [CHẾ ĐỘ TỰ ĐỘNG (AUTO)] Nước chưa đầy (%.1f%% / %d%%) -> Hoãn nạp OTA và kích hoạt bơm đầy bể trước!",
+                 pump_ctx->current_percent, pump_ctx->max_water_percent);
+        m_pump_controler_queue_ota(&ota_cfg);
+      } else {
+        if (pump_ctx && pump_ctx->is_pump_on) {
+          ESP_LOGW(TAG, "Máy bơm đang bật -> Tắt máy bơm trước khi nạp OTA để an toàn!");
+          m_pump_controler_set_pump(false);
+          vTaskDelay(pdMS_TO_TICKS(1000));
+        }
+        ESP_LOGI(TAG, "Đủ điều kiện an toàn! Bắt đầu tiến trình nạp Firmware...");
+        m_state_machine_set_state(STATE_OTA);
+        ota_start(&ota_cfg);
+      }
     }
   }
 

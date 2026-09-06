@@ -1019,6 +1019,27 @@ async function handleTriggerOta(e) {
             if (otaBytesInfo) otaBytesInfo.textContent = `${kbRead} KB / ${kbTotal} KB`;
           }
 
+          // 0. Nếu đang ở trạng thái CHỜ BƠM ĐẦY BỂ (Smart Auto OTA)
+          if (progRes.status === 'pending_wait_full') {
+            frozenSeconds = 0; // Tuyệt đối không timeout khi đang bơm nước
+            const currentWater = (progRes.water_percent !== undefined && progRes.water_percent >= 0) ? progRes.water_percent : (currentDevice?.water_level || 0);
+            const targetWater = progRes.target_percent || 95;
+            if (otaProgressBar) {
+              otaProgressBar.style.width = `${Math.min(100, Math.max(5, currentWater))}%`;
+              otaProgressBar.style.background = 'linear-gradient(90deg, #f59e0b, #d97706)';
+            }
+            if (otaPercentText) otaPercentText.textContent = `Nước: ${currentWater.toFixed(0)}% / ${targetWater}%`;
+            if (otaSpinner) otaSpinner.style.display = 'inline-block';
+            otaStatusText.innerHTML = `<i class="fa-solid fa-faucet-drip fa-bounce" style="color:#f59e0b"></i> <b style="color:#f59e0b;">ĐANG CHẾ ĐỘ AUTO: Hệ thống đang bơm nước đầy bể (${currentWater.toFixed(0)}% / ${targetWater}%). Firmware sẽ tự động nạp ngay khi bể đầy!</b>`;
+            if (otaBytesInfo) otaBytesInfo.textContent = `Đang bơm nước lên...`;
+            return;
+          }
+
+          // Phục hồi lại màu thanh tiến trình bình thường khi thoát trạng thái pending
+          if (progRes.status === 'in_progress' && otaProgressBar) {
+            otaProgressBar.style.background = 'linear-gradient(90deg, var(--primary), #3b82f6)';
+          }
+
           // 1. Nếu nhận được báo cáo thất bại hoặc Rollback thực sự từ thiết bị
           // Bỏ qua nếu là cache cũ sót lại từ phiên trước khi mới bấm nút (pollCount <= 4 và pct >= 100)
           const isStalePreviousFail = (pollCount <= 4 && pct >= 100 && progRes.status === 'failed');
@@ -1067,9 +1088,25 @@ async function handleTriggerOta(e) {
         return; // Để nhánh failed xử lý
       }
 
-      const isVerMatched = (currentVer === version || currentVer === `v${version}` || (initialVer && currentVer && currentVer !== initialVer));
-      const isStatusSuccess = (progRes && progRes.status === 'success');
-      const isOtaSuccess = (isStatusSuccess && pct >= 100) || (hasReachedReboot && (isVerMatched || isStatusSuccess));
+      // XÁC MINH PHIÊN BẢN (VERSION VERIFICATION):
+      // Sau 3 giây polling (để loại trừ cache cũ lúc mới bấm nút):
+      // Nếu thiết bị báo lên phiên bản mới khớp với version cần nạp, hoặc version đã thay đổi khác initialVer:
+      // BẤT KỂ thanh % trên web đang ở đâu (kể cả 30%, 50% do delay MQTT), lập tức ĐẨY THẲNG LÊN 100% VÀ BÁO THÀNH CÔNG!
+      const cleanVer = (v) => String(v || '').trim().toLowerCase().replace(/^v/, '');
+      const curClean = cleanVer(currentVer);
+      const tgtClean = cleanVer(version);
+      const initClean = cleanVer(initialVer);
+
+      const isTargetDifferent = Boolean(tgtClean && initClean && tgtClean !== initClean);
+      const isVerMatched = Boolean(
+        pollCount >= 3 && curClean && (
+          (isTargetDifferent && curClean === tgtClean) ||
+          (isTargetDifferent && curClean !== initClean)
+        )
+      );
+
+      const isStatusSuccess = Boolean(progRes && progRes.status === 'success');
+      const isOtaSuccess = isVerMatched || (isStatusSuccess && (pct >= 100 || hasReachedReboot));
 
       if (isOtaSuccess) {
         // Kiểm tra lại lần cuối xem có cờ lỗi không
@@ -1083,10 +1120,16 @@ async function handleTriggerOta(e) {
           otaProgressBar.style.background = 'linear-gradient(90deg, #10b981, #059669)';
         }
         if (otaPercentText) otaPercentText.textContent = '100%';
+        if (otaBytesInfo && uploadData.size) {
+          const kbTotal = (uploadData.size / 1024).toFixed(0);
+          otaBytesInfo.textContent = `${kbTotal} KB / ${kbTotal} KB`;
+        }
         if (otaSpinner) otaSpinner.style.display = 'none';
         if (btnSubmitOta) btnSubmitOta.disabled = false;
-        otaStatusText.innerHTML = `<i class="fa-solid fa-circle-check" style="color:#10b981; font-size:1.2rem;"></i> <b style="color:#10b981;">NÂNG CẤP THÀNH CÔNG! Thiết bị đang chạy v${version}</b>`;
-        showToast(`🎉 NÂNG CẤP THÀNH CÔNG! Thiết bị đã cập nhật lên phiên bản v${version}!`, 'success');
+
+        const displayVer = currentVer || version;
+        otaStatusText.innerHTML = `<i class="fa-solid fa-circle-check" style="color:#10b981; font-size:1.2rem;"></i> <b style="color:#10b981;">NÂNG CẤP THÀNH CÔNG! Thiết bị đã kích hoạt v${displayVer}</b>`;
+        showToast(`🎉 NÂNG CẤP THÀNH CÔNG! Thiết bị đã cập nhật lên phiên bản v${displayVer}!`, 'success');
         updateOtaTargetVersionDisplay();
         return;
       }
