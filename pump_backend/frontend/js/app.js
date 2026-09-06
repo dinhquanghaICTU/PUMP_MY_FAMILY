@@ -1124,7 +1124,7 @@ async function handleTriggerOta(e) {
       await fetchDeviceData(false);
       updateOtaTargetVersionDisplay();
 
-      const currentVer = target === 'esp32_tank'
+      const latestVer = target === 'esp32_tank'
         ? currentDevice?.tank_firmware_version
         : currentDevice?.firmware_version;
 
@@ -1135,16 +1135,13 @@ async function handleTriggerOta(e) {
       }
 
       // XÁC MINH HOÀN TẤT OTA:
-      const cleanVer = (v) => String(v || '').trim().toLowerCase().replace(/^v/, '');
-      const curClean = cleanVer(currentVer);
-      const tgtClean = cleanVer(version);
-      const initClean = cleanVer(initialVer);
+      const latestClean = cleanVer(latestVer);
 
       // Điều kiện 1: Phiên bản trên thiết bị đã khớp với version mục tiêu hoặc đã khác version ban đầu
       const isVerMatched = Boolean(
-        pollCount >= 3 && curClean && (
-          curClean === tgtClean || 
-          (initClean && curClean !== initClean)
+        latestClean && (
+          latestClean === tgtClean || 
+          (initClean && latestClean !== initClean)
         )
       );
 
