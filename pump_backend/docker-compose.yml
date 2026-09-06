@@ -1,0 +1,47 @@
+services:
+  # 1. CƠ SỞ DỮ LIỆU POSTGRESQL
+  postgres_db:
+    image: postgres:15-alpine
+    container_name: pump_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: pump_admin
+      POSTGRES_PASSWORD: PumpFamilyPass2026
+      POSTGRES_DB: pump_family_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # 2. FASTAPI BACKEND + HIVEMQ CLIENT
+  backend_api:
+    build: .
+    container_name: pump_backend
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: "postgresql://pump_admin:PumpFamilyPass2026@postgres_db:5432/pump_family_db"
+      JWT_SECRET: "pump_family_super_secret_jwt_key_2026"
+      MQTT_BROKER_URI: "mqtts://20476a36ce36478d90de6d5676587638.s1.eu.hivemq.cloud:8883"
+      MQTT_USERNAME: "quanghaictu"
+      MQTT_PASSWORD: "Zdinhquangha1234"
+    volumes:
+      - ./firmware:/app/firmware
+    depends_on:
+      - postgres_db
+
+  # 3. GIAO DIỆN WEB DASHBOARD (NGINX CỔNG 80)
+  frontend:
+    build: ./frontend
+    container_name: pump_frontend
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html
+    depends_on:
+      - backend_api
+
+volumes:
+  postgres_data:

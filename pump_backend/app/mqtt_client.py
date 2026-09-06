@@ -1,0 +1,115 @@
+import json
+import ssl
+import time
+from urllib.parse import urlparse
+import paho.mqtt.client as mqtt
+from sqlmodel import Session, select
+from app.config import settings
+from app.database import engine
+from app.models import Device
+
+current_ota_progress = {
+    "target": "esp32s3_cabinet",
+    "status": "idle",
+    "percent": 0,
+    "bytes": 0,
+    "total": 0,
+    "version": None,
+    "error": None,
+    "message": None,
+    "timestamp": 0
+}
+
+parsed_url = urlparse(settings.MQTT_BROKER_URI)
+broker_host = parsed_url.hostname or "localhost"
+broker_port = parsed_url.port or 8883
+is_tls = parsed_url.scheme in ["mqtts", "ssl"]
+
+# Sử dụng API mới của Paho MQTT v2
+mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="fastapi_backend_server")
+
+if settings.MQTT_USERNAME:
+    mqtt_client.username_pw_set(settings.MQTT_USERNAME, settings.MQTT_PASSWORD)
+
+if is_tls:
+    mqtt_client.tls_set(cert_reqs=ssl.CERT_REQUIRED)
+
+def on_connect(client, userdata, flags, rc, properties=None):
+    if rc == 0:
+        print("[FastAPI] Đã kết nối thành công tới HiveMQ Cloud!")
+        # Lắng nghe trạng thái từ ESP32-S3
+        client.subscribe("pump/+/status", qos=1)
+        print("[FastAPI] Đang lắng nghe topic: pump/+/status")
+    else:
+        print(f"[FastAPI] Kết nối HiveMQ thất bại, mã lỗi: {rc}")
+
+def on_message(client, userdata, msg):
+    try:
+        topic = msg.topic
+        payload_str = msg.payload.decode("utf-8")
+        print(f"[FastAPI] Nhận MQTT [{topic}]: {payload_str}")
+
+        data = json.loads(payload_str)
+        # Giả sử ESP32 gửi { "water_level": 80, "pump_running": true, ... }
+        with Session(engine) as session:
+            statement = select(Device).where(Device.device_code == "PUMP_FAMILY_01")
+            device = session.exec(statement).first()
+            if device:
+                device.is_online = True
+                if "water_percent" in data:
+                    # Mức nước từ cảm biến (nếu -1 là chưa có dữ liệu từ node)
+                    pct = float(data["water_percent"])
+                    device.water_level = max(0, min(100, int(pct))) if pct >= 0 else 0
+                if "pump" in data:
+                    device.is_pump_running = bool(data["pump"] == 1)
+                if "mode" in data:
+                    device.is_auto_mode = (data["mode"] == "auto")
+                if "child_lock" in data:
+                    device.is_child_lock = bool(data["child_lock"] == 1)
+                # CHỈ cập nhật phiên bản từ gói tin telemetry thông thường, KHÔNG lấy từ gói tin ota_progress
+                if not data.get("event"):
+                    if "version" in data and data["version"]:
+                        device.firmware_version = str(data["version"])
+                    if "tank_version" in data and data["tank_version"]:
+                        device.tank_firmware_version = str(data["tank_version"])
+                session.add(device)
+                session.commit()
+
+        # Bắt sự kiện tiến độ OTA từ ESP32
+        if data.get("event") in ("ota_progress", "ota_status"):
+            target = data.get("target", "esp32s3_cabinet")
+            if target == "node_tank":
+                target = "esp32_tank"
+            current_ota_progress["target"] = target
+            current_ota_progress["status"] = data.get("status", "in_progress")
+            current_ota_progress["percent"] = data.get("percent", 0)
+            current_ota_progress["bytes"] = data.get("bytes", 0)
+            current_ota_progress["total"] = data.get("total", 0)
+            current_ota_progress["version"] = data.get("version")
+            current_ota_progress["error"] = data.get("error")
+            current_ota_progress["message"] = data.get("message")
+            current_ota_progress["timestamp"] = int(time.time())
+            print(f"📡 [OTA PROGRESS] {current_ota_progress['target']} -> {current_ota_progress['percent']}% ({current_ota_progress['status']})")
+    except Exception as e:
+        print(f"[FastAPI] Lỗi xử lý tin MQTT: {e}")
+
+mqtt_client.on_connect = on_connect
+mqtt_client.on_message = on_message
+
+def start_mqtt():
+    try:
+        print(f"[FastAPI] Đang kết nối tới HiveMQ Cloud: {broker_host}:{broker_port}...")
+        mqtt_client.connect(broker_host, broker_port, 60)
+        mqtt_client.loop_start()
+    except Exception as e:
+        print(f"[FastAPI] Lỗi khởi động MQTT Client: {e}")
+
+def send_pump_command(command: dict):
+    topic = "pump/family/command"
+    # ESP32 dùng hàm C strstr tìm chuỗi kiểu '"action":"off"' (KHÔNG CÓ DẤU CÁCH sau dấu 2 chấm)
+    payload = json.dumps(command, separators=(',', ':'))
+    res = mqtt_client.publish(topic, payload, qos=1)
+    if res.rc == mqtt.MQTT_ERR_SUCCESS:
+        print(f" [FastAPI] Đã gửi lệnh xuống ESP32 [{topic}]: {payload}")
+    else:
+        print(f" [FastAPI] Gửi lệnh MQTT thất bại!")

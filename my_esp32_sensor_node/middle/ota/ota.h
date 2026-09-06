@@ -39,4 +39,6 @@ void ota_node_rollback_and_reboot(void);
 
 bool ota_node_is_updating(void);
 
+int64_t ota_node_get_last_activity_time(void);
+
 #endif // __OTA_NODE_H__

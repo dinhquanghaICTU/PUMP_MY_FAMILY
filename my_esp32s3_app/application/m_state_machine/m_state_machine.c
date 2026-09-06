@@ -3,6 +3,7 @@
 #include "button.h"
 #include "config.h"
 #include "esp_log.h"
+#include "esp_ota_ops.h"
 #include "esp_timer.h"
 #include "flash.h"
 #include "freertos/FreeRTOS.h"
@@ -10,6 +11,8 @@
 #include "led.h"
 #include "m_pump_controler.h"
 #include "mqtt.h"
+#include "nvs.h"
+#include "nvs_flash.h"
 #include "ota.h"
 #include "wifi.h"
 #include <string.h>
@@ -324,8 +327,25 @@ void m_state_machine_task(void *arg) {
       ESP_LOGI(TAG, "MQTT connected successfully!");
 
       app_mqtt_subscribe(TOPIC_PUMP_COMMAND, 1);
-
       app_mqtt_subscribe(TOPIC_PUMP_OTA, 1);
+
+      // Kiểm tra xem có cờ cảnh báo Rollback từ lần boot trước không
+      nvs_handle_t nvs;
+      if (nvs_open("system_cfg", NVS_READWRITE, &nvs) == ESP_OK) {
+        char rollback_ver[32] = {0};
+        size_t len = sizeof(rollback_ver);
+        if (nvs_get_str(nvs, "fw_rollback", rollback_ver, &len) == ESP_OK && len > 1) {
+          ESP_LOGE(TAG, "🚨 [BÁO CÁO CLOUD] Bản firmware [%s] vừa bị crash & rollback! Gửi cảnh báo lên MQTT...", rollback_ver);
+          char roll_buf[256];
+          snprintf(roll_buf, sizeof(roll_buf),
+                   "{\"event\":\"ota_progress\",\"target\":\"esp32s3_cabinet\",\"status\":\"failed\",\"percent\":0,\"error\":\"ROLLBACK_APP_CRASHED\",\"message\":\"Bản firmware v%s bị lỗi/crash khi khởi động, đã tự động Rollback về bản cũ!\"}",
+                   rollback_ver);
+          app_mqtt_publish("pump/family/status", roll_buf, 1, 0);
+          nvs_erase_key(nvs, "fw_rollback");
+          nvs_commit(nvs);
+        }
+        nvs_close(nvs);
+      }
 
       m_state_machine_set_state(STATE_IDLE);
       break;

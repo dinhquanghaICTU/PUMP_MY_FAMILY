@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>PUMP MY FAMILY - Hệ Thống Máy Bơm & Giám Sát Nước Thông Minh</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="css/style.css?v=6">
+</head>
+<body>
+  <!-- Ambient Cyber Glows -->
+  <div class="bg-mesh"></div>
+  <div class="bg-orb orb-1"></div>
+  <div class="bg-orb orb-2"></div>
+  <div class="bg-orb orb-3"></div>
+
+  <!-- Main App Layout (Sidebar + Main Viewports) -->
+  <div class="app-layout">
+    <!-- ==================== 1. LEFT SIDEBAR NAVIGATION ==================== -->
+    <aside class="app-sidebar" id="appSidebar">
+      <!-- Sidebar Brand Header -->
+      <div class="sidebar-brand">
+        <div class="brand-icon-wrapper">
+          <div class="brand-icon">
+            <i class="fa-solid fa-droplet"></i>
+          </div>
+          <span class="brand-pulse"></span>
+        </div>
+        <div class="brand-text">
+          <div class="brand-title-row">
+            <h2>PUMP MY FAMILY</h2>
+            <span class="brand-version-chip">v2.4</span>
+          </div>
+          <span class="brand-subtitle"><i class="fa-solid fa-satellite-dish"></i> Smart Water IoT</span>
+        </div>
+        <button class="btn-icon sidebar-close-btn" id="btnCloseSidebar" title="Đóng Menu">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Navigation Links -->
+      <nav class="sidebar-nav">
+        <div class="nav-section-label">HỆ THỐNG ĐIỀU KHIỂN</div>
+        
+        <a href="javascript:void(0)" class="nav-item active" id="navHome">
+          <div class="nav-item-icon"><i class="fa-solid fa-house-chimney"></i></div>
+          <span class="nav-item-text">Trang Chủ (Bơm)</span>
+          <span class="nav-item-badge live-badge">LIVE</span>
+        </a>
+
+        <a href="javascript:void(0)" class="nav-item" id="navAdmin" style="display: none;">
+          <div class="nav-item-icon"><i class="fa-solid fa-shield-halved"></i></div>
+          <span class="nav-item-text">Trang Quản Trị</span>
+          <span class="nav-item-badge admin-badge">ADMIN</span>
+        </a>
+
+        <a href="javascript:void(0)" class="nav-item" id="navLogs">
+          <div class="nav-item-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
+          <span class="nav-item-text">Nhật Ký Vận Hành</span>
+        </a>
+
+        <div class="nav-section-label" style="margin-top: 18px;">TIỆN ÍCH NHANH</div>
+        
+        <a href="javascript:void(0)" class="nav-item" id="navOpenTankConfig">
+          <div class="nav-item-icon"><i class="fa-solid fa-sliders"></i></div>
+          <span class="nav-item-text">Cài Đặt Téc Nước</span>
+        </a>
+        
+        <a href="javascript:void(0)" class="nav-item" id="navAddDevice">
+          <div class="nav-item-icon"><i class="fa-solid fa-plus-circle"></i></div>
+          <span class="nav-item-text">Thêm Máy Bơm</span>
+        </a>
+      </nav>
+
+      <!-- Sidebar Footer: Status & User Profile -->
+      <div class="sidebar-footer">
+        <div class="status-badge" id="systemStatusBadge">
+          <span class="status-radar">
+            <span class="radar-ping"></span>
+            <span class="status-dot"></span>
+          </span>
+          <span class="status-label">Đang kết nối Cloud...</span>
+        </div>
+
+        <div class="user-menu" id="userMenuArea" style="display: none;">
+          <div class="user-info">
+            <div class="avatar-ring">
+              <i class="fa-solid fa-user-shield"></i>
+            </div>
+            <div class="user-text-meta">
+              <span class="user-name" id="displayUserName">Người dùng</span>
+              <span class="role-badge" id="displayUserRole">USER</span>
+            </div>
+          </div>
+          <button class="btn btn-warning btn-sm" id="btnAdminPortal" style="display: none;" title="Trang Quản Trị">
+            <i class="fa-solid fa-screwdriver-wrench"></i>
+          </button>
+          <button class="btn-icon" id="logoutBtn" title="Đăng xuất">
+            <i class="fa-solid fa-arrow-right-from-bracket"></i>
+          </button>
+        </div>
+
+        <button class="btn btn-primary btn-block" id="openAuthModalBtn">
+          <i class="fa-solid fa-user-lock"></i> <span>Đăng Nhập</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Mobile Drawer Backdrop Overlay -->
+    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+    <!-- ==================== 2. MAIN CONTENT AREA ==================== -->
+    <div class="main-wrapper">
+      <!-- Top Bar for Mobile Toggle & Breadcrumb -->
+      <header class="topbar glass-card">
+        <div class="topbar-left">
+          <button class="btn-icon hamburger-btn" id="btnToggleSidebar" title="Mở Menu Danh Mục">
+            <i class="fa-solid fa-bars-staggered"></i>
+          </button>
+          <div class="topbar-breadcrumb">
+            <span class="breadcrumb-root text-muted"><i class="fa-solid fa-droplet text-cyan"></i> PUMP MY FAMILY</span>
+            <i class="fa-solid fa-chevron-right breadcrumb-sep text-muted"></i>
+            <span class="breadcrumb-current" id="currentViewTitle">Trang Chủ (Giám Sát Bơm)</span>
+          </div>
+        </div>
+
+        <div class="topbar-right">
+          <button class="btn btn-secondary btn-sm" id="btnRefreshTop" title="Làm mới trạng thái">
+            <i class="fa-solid fa-arrows-rotate"></i> <span class="d-none-mobile">Làm Mới</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- ==================== VIEW 1: TRANG CHỦ (DASHBOARD) ==================== -->
+      <main class="main-content" id="mainDashboard" style="display: none;">
+        <!-- Cockpit Device Deck -->
+        <section class="device-bar card glass-card">
+          <div class="device-bar-top">
+            <!-- Device Selector -->
+            <div class="device-select-box">
+              <label class="section-micro-label"><i class="fa-solid fa-server"></i> Máy Bơm Đang Chọn</label>
+              <div class="select-wrapper">
+                <i class="fa-solid fa-microchip select-icon"></i>
+                <select id="deviceSelector">
+                  <option value="">Đang tải danh sách thiết bị...</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Quick Action Buttons Toolbar -->
+            <div class="device-actions-toolbar">
+              <button class="btn btn-secondary btn-sm" id="btnRefresh" title="Làm mới trạng thái">
+                <i class="fa-solid fa-arrows-rotate"></i> <span>Làm Mới</span>
+              </button>
+              <button class="btn btn-outline btn-sm" id="btnOpenTankConfigModal" title="Cài đặt thông số téc nước">
+                <i class="fa-solid fa-sliders"></i> <span>Cài Đặt Bể</span>
+              </button>
+              <button class="btn btn-outline btn-sm" id="btnAddDevice" title="Thêm máy bơm mới vào tài khoản">
+                <i class="fa-solid fa-plus"></i> <span>Thêm Bơm</span>
+              </button>
+              <button class="btn btn-primary btn-sm" id="btnOpenShareModal" style="display: none;" title="Chia sẻ quyền sử dụng máy bơm">
+                <i class="fa-solid fa-user-plus"></i> <span>Chia Sẻ</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Hardware & Node Metadata Strip -->
+          <div class="device-meta-strip" id="deviceMetaArea">
+            <div class="meta-chip">
+              <span class="meta-chip-label">MÃ THIẾT BỊ</span>
+              <span class="meta-chip-val font-mono" id="currentDeviceCode">---</span>
+            </div>
+            <div class="meta-chip">
+              <span class="meta-chip-label">VAI TRÒ</span>
+              <span class="badge" id="currentDeviceRoleBadge">OWNER</span>
+            </div>
+            <div class="meta-chip hardware-chip" title="Node Master Tủ Điện - ESP32-S3 Dual-Core">
+              <span class="meta-chip-label"><i class="fa-solid fa-microchip text-cyan"></i> NODE TỦ S3</span>
+              <span class="badge badge-info" id="currentFwVersion">v1.0.0</span>
+            </div>
+            <div class="meta-chip hardware-chip" title="Node Cảm Biến Siêu Âm Bể Nước - ESP32 ESP-NOW Gateway">
+              <span class="meta-chip-label"><i class="fa-solid fa-water text-purple"></i> NODE BỂ NƯỚC</span>
+              <span class="badge badge-purple" id="currentTankFwVersion">v1.0.0</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Dashboard Grid -->
+        <section class="dashboard-grid">
+          <!-- 1. Tank Visualizer Card (Téc Nước Trực Quan 3D) -->
+          <div class="card glass-card tank-card">
+            <div class="card-header">
+              <div class="card-header-title">
+                <div class="header-icon-box cyan-glow">
+                  <i class="fa-solid fa-layer-group"></i>
+                </div>
+                <div>
+                  <h3>Téc Nước Trực Quan</h3>
+                  <p class="header-subtitle">Giám sát thể tích & mực nước theo thời gian thực</p>
+                </div>
+              </div>
+              <span class="live-indicator">
+                <span class="pulse-ring"></span>
+                <span>LIVE TELEMETRY</span>
+              </span>
+            </div>
+
+            <!-- 3D Cyber Tank Container -->
+            <div class="tank-container">
+              <div class="tank-frame-wrapper">
+                <!-- Top Metal Lid Collar -->
+                <div class="tank-collar tank-collar-top">
+                  <div class="collar-bolt"></div>
+                  <div class="collar-sensor-badge"><i class="fa-solid fa-tower-broadcast"></i> SENSOR US-100</div>
+                  <div class="collar-bolt"></div>
+                </div>
+
+                <!-- Main Cylindrical Glass Reservoir -->
+                <div class="tank-cylinder" id="tankCylinder">
+                  <!-- Measurement Gauge Laser Ruler -->
+                  <div class="tank-markers">
+                    <div class="gauge-mark level-100"><span class="mark-line"></span><span class="mark-text">100% ĐẦY</span></div>
+                    <div class="gauge-mark level-75"><span class="mark-line"></span><span class="mark-text">75%</span></div>
+                    <div class="gauge-mark level-50"><span class="mark-line"></span><span class="mark-text">50%</span></div>
+                    <div class="gauge-mark level-25"><span class="mark-line"></span><span class="mark-text">25% CẠN</span></div>
+                    <div class="gauge-mark level-0"><span class="mark-line"></span><span class="mark-text">0% ĐÁY</span></div>
+                  </div>
+
+                  <!-- Cylindrical Glass Specular Reflections -->
+                  <div class="glass-reflection"></div>
+
+                  <!-- Water Body with Animated Multi-Wave Layers -->
+                  <div class="water-body" id="waterBody" style="height: 0%;">
+                    <!-- Rising Water Micro-Bubbles -->
+                    <div class="water-bubbles">
+                      <span class="bubble b1"></span>
+                      <span class="bubble b2"></span>
+                      <span class="bubble b3"></span>
+                      <span class="bubble b4"></span>
+                      <span class="bubble b5"></span>
+                    </div>
+
+                    <!-- Wave Layers -->
+                    <div class="wave wave-1"></div>
+                    <div class="wave wave-2"></div>
+                    <div class="wave-glow"></div>
+                  </div>
+
+                  <!-- Center High-Tech HUD Readout -->
+                  <div class="tank-info-overlay">
+                    <div class="water-percent-wrapper">
+                      <div class="water-percent-text font-mono" id="waterPercentDisplay">--%</div>
+                    </div>
+                    <div class="water-volume-badge" id="waterStatusText">
+                      <i class="fa-solid fa-spinner fa-spin"></i> Đang tải dữ liệu...
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Bottom Metal Base Collar -->
+                <div class="tank-collar tank-collar-bottom">
+                  <div class="collar-bolt"></div>
+                  <div class="collar-base-label"><i class="fa-solid fa-faucet"></i> OUTLET VALVE</div>
+                  <div class="collar-bolt"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Sensor Telemetry Micro Cards -->
+            <div class="tank-stats-row">
+              <div class="stat-card">
+                <div class="stat-icon-wrapper battery-glow">
+                  <i class="fa-solid fa-battery-half stat-icon"></i>
+                </div>
+                <div class="stat-content">
+                  <span class="stat-title">PIN NODE BỂ</span>
+                  <span class="stat-value font-mono" id="nodeBatteryDisplay">-- V</span>
+                </div>
+              </div>
+
+              <div class="stat-card">
+                <div class="stat-icon-wrapper distance-glow">
+                  <i class="fa-solid fa-ruler-vertical stat-icon"></i>
+                </div>
+                <div class="stat-content">
+                  <span class="stat-title">KHOẢNG CÁCH</span>
+                  <span class="stat-value font-mono" id="waterDistanceDisplay">-- cm</span>
+                </div>
+              </div>
+
+              <div class="stat-card">
+                <div class="stat-icon-wrapper runtime-glow">
+                  <i class="fa-solid fa-stopwatch stat-icon"></i>
+                </div>
+                <div class="stat-content">
+                  <span class="stat-title">THỜI GIAN BƠM</span>
+                  <span class="stat-value font-mono" id="pumpRuntimeDisplay">0s</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Industrial Controls Card (Bảng Điều Khiển) -->
+          <div class="card glass-card control-card">
+            <div class="card-header">
+              <div class="card-header-title">
+                <div class="header-icon-box amber-glow">
+                  <i class="fa-solid fa-sliders"></i>
+                </div>
+                <div>
+                  <h3>Bảng Điều Khiển</h3>
+                  <p class="header-subtitle">Công tắc chính & Chế độ vận hành tủ điện</p>
+                </div>
+              </div>
+              <span class="device-state-pill state-idle" id="pumpStatePill">CHỜ BƠM</span>
+            </div>
+
+            <!-- Master Pump Control Switchboard -->
+            <div class="main-pump-control">
+              <div class="pump-switchboard-stage">
+                <!-- Outer Ambient Energy Rings -->
+                <div class="pump-energy-ring ring-outer"></div>
+                <div class="pump-energy-ring ring-mid"></div>
+
+                <!-- Master Tactile Button -->
+                <div class="pump-circle-button" id="pumpToggleButton">
+                  <div class="pump-button-bezel">
+                    <div class="pump-icon-glow">
+                      <i class="fa-solid fa-power-off"></i>
+                    </div>
+                    <span class="pump-btn-status" id="pumpButtonText">MÁY BƠM TẮT</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="pump-notice-box">
+                <i class="fa-solid fa-hand-pointer"></i>
+                <span id="pumpNoticeText">Bấm nút tròn lớn để bật hoặc tắt máy bơm</span>
+              </div>
+            </div>
+
+            <!-- Smart Feature Toggles List -->
+            <div class="toggles-list">
+              <!-- Mode Auto/Manual Toggle -->
+              <div class="toggle-card">
+                <div class="toggle-icon-box">
+                  <i class="fa-solid fa-robot text-cyan"></i>
+                </div>
+                <div class="toggle-info">
+                  <div class="toggle-title">Chế Độ Tự Động (Smart Auto)</div>
+                  <div class="toggle-desc">Tự kích hoạt bơm khi cạn, tự động ngắt an toàn khi đầy bể</div>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="toggleAutoMode" checked>
+                  <span class="slider round"></span>
+                </label>
+              </div>
+
+              <!-- Child Lock Toggle -->
+              <div class="toggle-card">
+                <div class="toggle-icon-box">
+                  <i class="fa-solid fa-lock text-purple"></i>
+                </div>
+                <div class="toggle-info">
+                  <div class="toggle-title">Khóa Trẻ Em (Child Lock)</div>
+                  <div class="toggle-desc">Vô hiệu hóa nút nhấn cơ trên tủ điện chống nghịch phá</div>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="toggleChildLock">
+                  <span class="slider round"></span>
+                </label>
+              </div>
+            </div>
+
+            <!-- View Only Warning if Applicable -->
+            <div class="view-only-warning" id="viewOnlyAlert" style="display: none;">
+              <i class="fa-solid fa-shield-halved"></i>
+              <div>
+                <strong>Chế Độ Chỉ Xem (VIEW ONLY)</strong>
+                <p>Bạn chỉ có quyền theo dõi mực nước. Nút điều khiển máy bơm đã bị khóa an toàn.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. Telemetry & Activity Logs Section -->
+        <section class="card glass-card logs-section" id="sectionLogs">
+          <div class="card-header">
+            <div class="card-header-title">
+              <div class="header-icon-box blue-glow">
+                <i class="fa-solid fa-clock-rotate-left"></i>
+              </div>
+              <div>
+                <h3>Nhật Ký Vận Hành Gần Nhất</h3>
+                <p class="header-subtitle">Lịch sử bật/tắt máy bơm, cảnh báo và thay đổi cài đặt</p>
+              </div>
+            </div>
+            <span class="badge badge-info" id="logsCountBadge">50 sự kiện</span>
+          </div>
+
+          <div class="table-responsive">
+            <table class="logs-table">
+              <thead>
+                <tr>
+                  <th><i class="fa-regular fa-clock"></i> Thời Gian</th>
+                  <th><i class="fa-solid fa-bolt"></i> Hành Động</th>
+                  <th><i class="fa-regular fa-user"></i> Người Kích Hoạt</th>
+                  <th><i class="fa-solid fa-water"></i> Mực Nước</th>
+                </tr>
+              </thead>
+              <tbody id="logsTableBody">
+                <tr>
+                  <td colspan="4" class="text-center py-4 text-muted">
+                    <i class="fa-solid fa-spinner fa-spin"></i> Đang tải dữ liệu nhật ký...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+
+      <!-- ==================== VIEW 2: TRANG QUẢN TRỊ (ADMIN PORTAL FULL-VIEW) ==================== -->
+      <section class="main-content" id="viewAdminPortal" style="display: none;">
+        <div class="admin-portal-wrapper">
+          <!-- Top Hero Card of Admin Portal -->
+          <div class="card glass-card admin-header-card">
+            <div class="admin-header-flex">
+              <div>
+                <div class="admin-page-badge"><i class="fa-solid fa-shield-halved"></i> TRUNG TÂM ĐIỀU HÀNH HỆ THỐNG</div>
+                <h2 class="admin-page-title">Trang Quản Trị Hệ Thống (Admin Portal)</h2>
+                <p class="text-muted">Quản lý người dùng, phân quyền thiết bị và nâng cấp Firmware OTA Dual-Node</p>
+              </div>
+              <button class="btn btn-secondary btn-sm" id="btnBackToHome">
+                <i class="fa-solid fa-arrow-left"></i> <span>Quay Về Trang Chủ</span>
+              </button>
+            </div>
+
+            <!-- Admin Tabs Navigation -->
+            <div class="admin-tabs">
+              <button class="admin-tab active" id="tabAdminUsers">
+                <i class="fa-solid fa-users-gear"></i> <span>Quản Lý Người Dùng</span>
+              </button>
+              <button class="admin-tab" id="tabAdminOta">
+                <i class="fa-solid fa-microchip"></i> <span>Nâng Cấp Firmware OTA</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- TAB 1: USER MANAGEMENT -->
+          <div class="admin-tab-content active" id="adminUsersSection">
+            <div class="card glass-card p-4">
+              <div class="admin-action-bar">
+                <div>
+                  <h4 style="margin: 0; color: #fff; font-size: 1.15rem; font-weight: 700;">Danh Sách Tài Khoản Hệ Thống</h4>
+                  <small class="text-muted">Xem, thêm, sửa đổi quyền hoặc xóa người dùng</small>
+                </div>
+                <button class="btn btn-primary btn-sm" id="btnAdminAddUser">
+                  <i class="fa-solid fa-user-plus"></i> Thêm User Mới
+                </button>
+              </div>
+
+              <div class="table-responsive" style="max-height: 480px; overflow-y: auto;">
+                <table class="logs-table">
+                  <thead>
+                    <tr>
+                      <th>Họ Tên</th>
+                      <th>Email</th>
+                      <th>Vai Trò</th>
+                      <th>Máy Bơm</th>
+                      <th>Ngày Tạo</th>
+                      <th>Hành Động</th>
+                    </tr>
+                  </thead>
+                  <tbody id="adminUsersTableBody">
+                    <tr>
+                      <td colspan="6" class="text-center py-4 text-muted">Đang tải danh sách người dùng...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 2: DUAL-NODE OTA -->
+          <div class="admin-tab-content" id="adminOtaSection" style="display: none;">
+            <div class="ota-grid">
+              <!-- Form Bắn Lệnh OTA -->
+              <div class="card glass-card p-4">
+                <h4 style="margin-top: 0; margin-bottom: 16px; color: var(--accent-cyan); font-weight: 800;">
+                  <i class="fa-solid fa-cloud-arrow-up"></i> Bắn Lệnh Cập Nhật Firmware
+                </h4>
+                <form id="adminOtaForm">
+                  <div class="form-group">
+                    <label>1. Thiết Bị Nhận Bản Nạp (Target Node)</label>
+                    <select id="otaTargetSelect" class="form-control" required>
+                      <option value="esp32s3_cabinet">🏠 Node Master Tủ Điện (ESP32-S3 - Dual OTA)</option>
+                      <option value="esp32_tank">🌊 Node Cảm Biến Bể Nước (ESP32-U - ESP-NOW Gateway)</option>
+                    </select>
+                    <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 6px;">
+                      <i class="fa-solid fa-circle-info"></i> Phiên bản đang chạy trên thiết bị: 
+                      <strong id="otaCurrentTargetVer" style="color: var(--accent-cyan);">v1.0.0</strong>
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label>2. Phiên Bản Firmware (Version)</label>
+                    <div class="input-wrapper">
+                      <i class="fa-solid fa-code-branch input-icon"></i>
+                      <input type="text" id="otaVersionInput" value="1.0.1" placeholder="vd: 1.0.1" required>
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label>3. Chọn File Firmware (.bin)</label>
+                    <div class="file-upload-box" id="otaDropZone">
+                      <i class="fa-solid fa-file-code fa-2x" style="color: var(--accent-cyan); margin-bottom: 8px;"></i>
+                      <div id="otaFileNameDisplay">Kéo thả file .bin vào đây hoặc bấm chọn file</div>
+                      <input type="file" id="otaBinFileInput" accept=".bin" style="display: none;" required>
+                      <button type="button" class="btn btn-secondary btn-sm mt-2" onclick="document.getElementById('otaBinFileInput').click();">
+                        <i class="fa-solid fa-folder-open"></i> Duyệt File .bin
+                      </button>
+                    </div>
+                  </div>
+
+                  <button type="submit" class="btn btn-warning btn-block" id="btnSubmitOta">
+                    <i class="fa-solid fa-bolt"></i> Upload & Bắn Lệnh OTA Ngay
+                  </button>
+                </form>
+
+                <!-- OTA Progress Box -->
+                <div id="otaStatusBox" class="ota-status-box" style="display: none; flex-direction: column; gap: 8px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                    <span id="otaStatusText" style="font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                      <div class="spinner-sm" id="otaSpinner"></div>
+                      <span>Đang xử lý...</span>
+                    </span>
+                    <span id="otaPercentText" style="font-size: 1.15rem; font-weight: 800; color: var(--accent-cyan);">0%</span>
+                  </div>
+                  <div class="progress-track" style="width: 100%; height: 10px; background: rgba(255,255,255,0.08); border-radius: 6px; overflow: hidden; border: 1px solid rgba(255,255,255,0.12);">
+                    <div id="otaProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #00f2fe, #4facfe); border-radius: 6px; transition: width 0.3s ease;"></div>
+                  </div>
+                  <div id="otaDetailStats" style="font-size: 0.8rem; color: var(--text-muted); display: flex; justify-content: space-between; width: 100%;">
+                    <span id="otaBytesInfo">0 KB / 0 KB</span>
+                    <span id="otaSpeedInfo"></span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Kho Firmware Trên VPS -->
+              <div class="card glass-card p-4">
+                <h4 style="margin-top: 0; margin-bottom: 16px; color: #fff; font-weight: 800;">
+                  <i class="fa-solid fa-folder-tree"></i> Kho Firmware Trên VPS
+                </h4>
+                <div class="table-responsive" style="max-height: 480px; overflow-y: auto;">
+                  <table class="logs-table">
+                    <thead>
+                      <tr>
+                        <th>Tên File</th>
+                        <th>Dung Lượng</th>
+                        <th>Tải Về</th>
+                      </tr>
+                    </thead>
+                    <tbody id="adminFirmwareTableBody">
+                      <tr>
+                        <td colspan="3" class="text-center py-4 text-muted">Chưa có firmware nào...</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== WELCOME SCREEN ==================== -->
+      <div class="welcome-container" id="welcomeScreen">
+        <div class="welcome-card glass-card">
+          <div class="welcome-icon">
+            <i class="fa-solid fa-shield-cat"></i>
+          </div>
+          <h2>Chào Mừng Đến Với PUMP MY FAMILY</h2>
+          <p>Hệ thống giám sát mực nước tự động và điều khiển máy bơm gia đình an toàn, thông minh qua Cloud HiveMQ.</p>
+          <div class="welcome-actions">
+            <button class="btn btn-primary btn-lg" id="welcomeLoginBtn">
+              <i class="fa-solid fa-right-to-bracket"></i> Đăng Nhập Để Bắt Đầu
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODALS ==================== -->
+  <!-- 1. AUTH MODAL (Login / Register) -->
+  <div class="modal-overlay" id="authModal">
+    <div class="modal-card glass-card">
+      <div class="modal-header">
+        <div class="auth-tabs">
+          <button class="auth-tab active" id="tabLogin">Đăng Nhập</button>
+          <button class="auth-tab" id="tabRegister">Đăng Ký</button>
+        </div>
+        <button class="modal-close" id="closeAuthModal">&times;</button>
+      </div>
+
+      <!-- Login Form -->
+      <form class="auth-form" id="loginForm">
+        <div class="form-group">
+          <label>Email</label>
+          <div class="input-wrapper">
+            <i class="fa-solid fa-envelope input-icon"></i>
+            <input type="email" id="loginEmail" placeholder="vd: quangha@gmail.com" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Mật Khẩu</label>
+          <div class="input-wrapper">
+            <i class="fa-solid fa-key input-icon"></i>
+            <input type="password" id="loginPassword" placeholder="Nhập mật khẩu" required>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">
+          <i class="fa-solid fa-arrow-right-to-bracket"></i> Đăng Nhập
+        </button>
+      </form>
+
+      <!-- Register Form -->
+      <form class="auth-form" id="registerForm" style="display: none;">
+        <div class="form-group">
+          <label>Họ và Tên</label>
+          <div class="input-wrapper">
+            <i class="fa-solid fa-user input-icon"></i>
+            <input type="text" id="regFullName" placeholder="vd: Đinh Quang Hà" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Email</label>
+          <div class="input-wrapper">
+            <i class="fa-solid fa-envelope input-icon"></i>
+            <input type="email" id="regEmail" placeholder="vd: quangha@gmail.com" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Mật Khẩu</label>
+          <div class="input-wrapper">
+            <i class="fa-solid fa-key input-icon"></i>
+            <input type="password" id="regPassword" placeholder="Tối thiểu 6 ký tự" required>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">
+          <i class="fa-solid fa-user-plus"></i> Tạo Tài Khoản
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 2. ADD DEVICE MODAL -->
+  <div class="modal-overlay" id="addDeviceModal">
+    <div class="modal-card glass-card">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-plus-circle"></i> Thêm Máy Bơm Mới</h3>
+        <button class="modal-close" id="closeAddDeviceModal">&times;</button>
+      </div>
+      <form class="auth-form" id="addDeviceForm">
+        <div class="form-group">
+          <label>Mã Thiết Bị (Device Code)</label>
+          <div class="input-wrapper">
+            <i class="fa-solid fa-microchip input-icon"></i>
+            <input type="text" id="addDeviceCode" value="PUMP_FAMILY_01" required>
+          </div>
+          <small class="form-hint">Mã định danh của con ESP32-S3 trong tủ điện</small>
+        </div>
+
+        <div class="form-group">
+          <label>Tên Gọi Gợi Nhớ</label>
+          <div class="input-wrapper">
+            <i class="fa-solid fa-tag input-icon"></i>
+            <input type="text" id="addDeviceName" placeholder="vd: Bơm Téc Tầng Thượng" required>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">
+          <i class="fa-solid fa-check"></i> Lưu Máy Bơm
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 3. SHARE DEVICE MODAL -->
+  <div class="modal-overlay" id="shareDeviceModal">
+    <div class="modal-card glass-card">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-share-nodes"></i> Chia Sẻ Quyền Máy Bơm</h3>
+        <button class="modal-close" id="closeShareModal">&times;</button>
+      </div>
+
+      <form class="auth-form" id="shareDeviceForm">
+        <div class="form-group">
+          <label>Email Người Nhận</label>
+          <div class="input-wrapper">
+            <i class="fa-solid fa-envelope input-icon"></i>
+            <input type="email" id="shareTargetEmail" placeholder="vd: vo_yeu@gmail.com" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Quyền Được Cấp</label>
+          <select id="sharePermissionSelect" class="form-control">
+            <option value="VIEW_ONLY">Chỉ Được Xem (VIEW_ONLY - Khóa nút bấm)</option>
+            <option value="CAN_CONTROL">Toàn Quyền Điều Khiển (CAN_CONTROL - Được Bật/Tắt)</option>
+          </select>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">
+          <i class="fa-solid fa-paper-plane"></i> Gửi Chia Sẻ
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 4. TANK CONFIG MODAL -->
+  <div class="modal-overlay" id="tankConfigModal">
+    <div class="modal-card glass-card">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-sliders"></i> Cài Đặt Kích Thước Bể Nước</h3>
+        <button class="modal-close" id="closeTankConfigModal">&times;</button>
+      </div>
+      <form class="auth-form" id="tankConfigForm">
+        <div class="form-group">
+          <label>Chiều Cao Téc Nước (cm)</label>
+          <div class="input-wrapper">
+            <i class="fa-solid fa-arrows-up-down input-icon"></i>
+            <input type="number" step="0.5" id="cfgTankHeight" placeholder="vd: 120" required>
+          </div>
+          <small class="form-hint">Chiều cao từ đáy téc lên tới mức đầy nước (cm)</small>
+        </div>
+
+        <div class="form-group">
+          <label>Khoảng Cách Cảm Biến Đến Mép Nước (Offset cm)</label>
+          <div class="input-wrapper">
+            <i class="fa-solid fa-ruler-vertical input-icon"></i>
+            <input type="number" step="0.5" id="cfgTankOffset" placeholder="vd: 10" required>
+          </div>
+          <small class="form-hint">Khoảng cách từ mặt cảm biến siêu âm đến mức nước 100%</small>
+        </div>
+
+        <div class="form-row-2">
+          <div class="form-group">
+            <label>Tự Bật Khi Cạn (Min %)</label>
+            <div class="input-wrapper">
+              <i class="fa-solid fa-arrow-down-wide-short input-icon"></i>
+              <input type="number" min="5" max="80" id="cfgMinWaterPct" placeholder="20" required>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Tự Ngắt Khi Đầy (Max %)</label>
+            <div class="input-wrapper">
+              <i class="fa-solid fa-arrow-up-wide-short input-icon"></i>
+              <input type="number" min="30" max="100" id="cfgMaxWaterPct" placeholder="90" required>
+            </div>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">
+          <i class="fa-solid fa-cloud-arrow-up"></i> Lưu & Đồng Bộ Xuống Tủ Điện
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 5. ADMIN USER CREATE/EDIT MODAL -->
+  <div class="modal-overlay" id="adminUserModal">
+    <div class="modal-card glass-card">
+      <div class="modal-header">
+        <h3 id="adminUserModalTitle"><i class="fa-solid fa-user-pen"></i> Chỉnh Sửa Người Dùng</h3>
+        <button class="modal-close" id="closeAdminUserModal">&times;</button>
+      </div>
+      <form class="auth-form" id="adminUserForm">
+        <input type="hidden" id="adminUserId">
+        
+        <div class="form-group">
+          <label>Họ và Tên</label>
+          <div class="input-wrapper">
+            <i class="fa-solid fa-user input-icon"></i>
+            <input type="text" id="adminUserFullName" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Email</label>
+          <div class="input-wrapper">
+            <i class="fa-solid fa-envelope input-icon"></i>
+            <input type="email" id="adminUserEmail" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Vai Trò Hệ Thống</label>
+          <select id="adminUserRole" class="form-control" required>
+            <option value="USER">USER (Người dùng thông thường)</option>
+            <option value="ADMIN">ADMIN (Quản trị viên tối cao)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label id="adminUserPassLabel">Mật Khẩu Mới (Để trống nếu không đổi)</label>
+          <div class="input-wrapper">
+            <i class="fa-solid fa-key input-icon"></i>
+            <input type="password" id="adminUserPassword" placeholder="Nhập mật khẩu">
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">
+          <i class="fa-solid fa-save"></i> Lưu Thông Tin User
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Notification Toast -->
+  <div class="toast" id="appToast">
+    <i class="fa-solid fa-circle-check toast-icon" id="toastIcon"></i>
+    <span class="toast-message" id="toastMessage">Thông báo</span>
+  </div>
+
+  <script src="js/app.js?v=10"></script>
+</body>
+</html>

@@ -5,6 +5,7 @@
 #include "esp_ota_ops.h"
 #include "esp_partition.h"
 #include "esp_system.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "state_machine.h"
@@ -17,6 +18,7 @@ static bool s_is_updating = false;
 static size_t s_total_bytes_written = 0;
 static uint32_t s_last_chunk_index = 0;
 static uint32_t s_expected_chunk_index = 0;
+static int64_t s_last_activity_time_ms = 0;
 
 esp_err_t ota_node_init(void) {
   const esp_partition_t *running = esp_ota_get_running_partition();
@@ -35,7 +37,8 @@ esp_err_t ota_node_init(void) {
     esp_ota_img_states_t ota_state;
     if (esp_ota_get_state_partition(running, &ota_state) == ESP_OK) {
       if (ota_state == ESP_OTA_IMG_PENDING_VERIFY) {
-        ESP_LOGW(TAG, "Phát hiện Firmware mới cần xác minh -> Đánh dấu HỢP LỆ & Hủy Rollback!");
+        ESP_LOGW(TAG, "Phát hiện Firmware mới cần xác minh -> Đánh dấu HỢP LỆ "
+                      "& Hủy Rollback!");
         esp_ota_mark_app_valid_cancel_rollback();
       }
     }
@@ -64,7 +67,8 @@ esp_err_t ota_node_start(size_t total_size) {
   ESP_LOGI(TAG, "Mở phiên OTA trên phân vùng: %s (Dung lượng: %d bytes)...",
            s_update_partition->label, (int)total_size);
 
-  esp_err_t err = esp_ota_begin(s_update_partition, OTA_WITH_SEQUENTIAL_WRITES, &s_ota_handle);
+  esp_err_t err = esp_ota_begin(s_update_partition, OTA_WITH_SEQUENTIAL_WRITES,
+                                &s_ota_handle);
   if (err != ESP_OK) {
     ESP_LOGE(TAG, "esp_ota_begin thất bại: %s", esp_err_to_name(err));
     s_is_updating = false;
@@ -77,12 +81,14 @@ esp_err_t ota_node_start(size_t total_size) {
   return ESP_OK;
 }
 
-esp_err_t ota_node_write_chunk(uint32_t chunk_index, const uint8_t *data, size_t length) {
+esp_err_t ota_node_write_chunk(uint32_t chunk_index, const uint8_t *data,
+                               size_t length) {
   if (!s_is_updating || s_ota_handle == 0 || !data || length == 0) {
     return ESP_ERR_INVALID_STATE;
   }
 
-  // 1. Chống ghi trùng: Nếu là chunk cũ Master gửi lại do mất ACK -> Bỏ qua không ghi vào Flash
+  // 1. Chống ghi trùng: Nếu là chunk cũ Master gửi lại do mất ACK -> Bỏ qua
+  // không ghi vào Flash
   if (chunk_index < s_expected_chunk_index) {
     return ESP_OK;
   }
@@ -90,13 +96,15 @@ esp_err_t ota_node_write_chunk(uint32_t chunk_index, const uint8_t *data, size_t
   // 2. Ghi chunk mới vào Flash
   esp_err_t err = esp_ota_write(s_ota_handle, data, length);
   if (err != ESP_OK) {
-    ESP_LOGE(TAG, "Lỗi ghi OTA chunk #%lu: %s", (unsigned long)chunk_index, esp_err_to_name(err));
+    ESP_LOGE(TAG, "Lỗi ghi OTA chunk #%lu: %s", (unsigned long)chunk_index,
+             esp_err_to_name(err));
     return err;
   }
 
   s_total_bytes_written += length;
   s_last_chunk_index = chunk_index;
   s_expected_chunk_index = chunk_index + 1;
+  s_last_activity_time_ms = esp_timer_get_time() / 1000;
   return ESP_OK;
 }
 
@@ -106,35 +114,43 @@ esp_err_t ota_node_finish(void) {
     return ESP_ERR_INVALID_STATE;
   }
 
-  ESP_LOGI(TAG, "Đang kết thúc ghi OTA... Đã nhận tổng cộng: %d bytes (Chunk cuối: #%lu)",
-           (int)s_total_bytes_written, (unsigned long)s_last_chunk_index);
+  ESP_LOGI(
+      TAG,
+      "Đang kết thúc ghi OTA... Đã nhận tổng cộng: %d bytes (Chunk cuối: #%lu)",
+      (int)s_total_bytes_written, (unsigned long)s_last_chunk_index);
 
   esp_err_t err = esp_ota_end(s_ota_handle);
   s_ota_handle = 0;
   s_is_updating = false;
+  s_last_activity_time_ms = 0;
 
   if (err != ESP_OK) {
-    ESP_LOGE(TAG, "❌ esp_ota_end thất bại (Mã lỗi: %s) -> Báo lỗi cho Master và phục hồi Firmware cũ!", esp_err_to_name(err));
+    ESP_LOGE(TAG,
+             "❌ esp_ota_end thất bại (Mã lỗi: %s) -> Báo lỗi cho Master và "
+             "phục hồi Firmware cũ!",
+             esp_err_to_name(err));
     // Bắn gói tin FAIL về cho Master Tủ Điện
-    esp_now_node_send_ota_response(OTA_PACKET_TYPE_FAIL, (uint32_t)err, esp_err_to_name(err));
+    esp_now_node_send_ota_response(OTA_PACKET_TYPE_FAIL, (uint32_t)err,
+                                   esp_err_to_name(err));
     node_state_machine_set_state(NODE_STATE_IDLE);
     return err;
   }
 
   err = esp_ota_set_boot_partition(s_update_partition);
   if (err != ESP_OK) {
-    ESP_LOGE(TAG, "esp_ota_set_boot_partition thất bại: %s", esp_err_to_name(err));
-    esp_now_node_send_ota_response(OTA_PACKET_TYPE_FAIL, (uint32_t)err, "SET_BOOT_FAILED");
+    ESP_LOGE(TAG, "esp_ota_set_boot_partition thất bại: %s",
+             esp_err_to_name(err));
+    esp_now_node_send_ota_response(OTA_PACKET_TYPE_FAIL, (uint32_t)err,
+                                   "SET_BOOT_FAILED");
     node_state_machine_set_state(NODE_STATE_IDLE);
     return err;
   }
 
-  // Báo thành công cho Master trước khi reboot
   esp_now_node_send_ota_response(OTA_PACKET_TYPE_SUCCESS, 0, "OTA_SUCCESS");
 
   ESP_LOGI(TAG, "🎉 NẠP OTA QUA ESP-NOW THÀNH CÔNG 100%%!");
-  ESP_LOGI(TAG, "Khởi động lại chip sau 2 giây để kích hoạt Firmware mới...");
-  vTaskDelay(pdMS_TO_TICKS(2000));
+  ESP_LOGI(TAG, "Khởi động lại chip sau 600ms để kích hoạt Firmware mới...");
+  vTaskDelay(pdMS_TO_TICKS(600));
   esp_restart();
 
   return ESP_OK;
@@ -144,10 +160,11 @@ void ota_node_abort(void) {
   if (s_is_updating && s_ota_handle != 0) {
     esp_ota_abort(s_ota_handle);
     s_ota_handle = 0;
-    s_is_updating = false;
-    ESP_LOGW(TAG, "Đã hủy phiên OTA và quay về đo đạc!");
-    node_state_machine_set_state(NODE_STATE_IDLE);
   }
+  s_is_updating = false;
+  s_last_activity_time_ms = 0;
+  ESP_LOGW(TAG, "Đã hủy phiên OTA và quay về đo đạc!");
+  node_state_machine_set_state(NODE_STATE_IDLE);
 }
 
 void ota_node_rollback_and_reboot(void) {
@@ -156,3 +173,7 @@ void ota_node_rollback_and_reboot(void) {
 }
 
 bool ota_node_is_updating(void) { return s_is_updating; }
+
+int64_t ota_node_get_last_activity_time(void) {
+  return s_last_activity_time_ms;
+}

@@ -5,6 +5,7 @@
 #include "freertos/task.h"
 #include "mqtt.h"
 #include "node_esp.h"
+#include "ota.h"
 #include "relay.h"
 #include "wifi.h"
 #include <math.h>
@@ -159,12 +160,12 @@ static void pump_controler_task(void *pvParam) {
     static int s_telemetry_tick = 0;
     if (++s_telemetry_tick >= 2) {
       s_telemetry_tick = 0;
-      char stat_json[256];
+      char stat_json[320];
       snprintf(
           stat_json, sizeof(stat_json),
           "{\"pump\":%d,\"mode\":\"%s\",\"water_percent\":%.1f,\"distance_cm\":"
           "%.1f,\"battery\":%.2f,\"runtime\":%lu,\"child_lock\":%d,\"state\":"
-          "\"%s\"}",
+          "\"%s\",\"version\":\"%s\",\"tank_version\":\"%s\"}",
           s_pump_ctx.is_pump_on ? 1 : 0,
           s_pump_ctx.mode == MODE_PUMP_AUTO ? "auto" : "manual",
           s_pump_ctx.current_percent, s_pump_ctx.current_distance_cm,
@@ -177,7 +178,9 @@ static void pump_controler_task(void *pvParam) {
                      ? "ERROR_TIMEOUT"
                      : (s_pump_ctx.state_current == STATE_PUMP_ERROR_NODE_LOST
                             ? "ERROR_NODE_LOST"
-                            : "IDLE")));
+                            : "IDLE")),
+          ota_get_current_version(),
+          ota_get_tank_version());
       app_mqtt_publish("pump/family/status", stat_json, 1, 0);
     }
   }

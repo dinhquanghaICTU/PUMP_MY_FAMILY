@@ -37,6 +37,7 @@ esp_err_t wifi_init_sta(uint8_t channel) {
   ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
   ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
   ESP_ERROR_CHECK(esp_wifi_start());
+  ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
 
   // Cố định Channel Wi-Fi an toàn cho ESP-NOW
   esp_wifi_set_promiscuous(true);

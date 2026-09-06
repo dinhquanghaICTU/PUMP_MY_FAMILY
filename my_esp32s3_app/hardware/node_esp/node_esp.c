@@ -27,6 +27,10 @@ static uint32_t g_last_packet_id = 0;
 static SemaphoreHandle_t s_ack_sem = NULL;
 static volatile uint32_t s_last_acked_chunk = 0;
 
+static SemaphoreHandle_t s_tank_ota_sem = NULL;
+static volatile tank_ota_response_t s_tank_ota_final_resp = TANK_OTA_RESP_NONE;
+static char s_tank_ota_fail_msg[64] = {0};
+
 static void on_esp_now_send_cb(const uint8_t *mac_addr,
                                esp_now_send_status_t status) {}
 
@@ -47,39 +51,56 @@ static void on_esp_now_recv_cb(const esp_now_recv_info_t *recv_info,
       }
       return;
     } else if (ota_pkt->type == OTA_PACKET_TYPE_FAIL) {
-      char err_str[64] = "UNKNOWN";
+      s_tank_ota_final_resp = TANK_OTA_RESP_FAIL;
+      s_tank_ota_fail_msg[0] = '\0';
       if (ota_pkt->data_len > 0) {
-        memcpy(err_str, ota_pkt->data, ota_pkt->data_len);
-        err_str[ota_pkt->data_len] = '\0';
+        size_t slen = ota_pkt->data_len < sizeof(s_tank_ota_fail_msg) - 1 ? ota_pkt->data_len : sizeof(s_tank_ota_fail_msg) - 1;
+        memcpy(s_tank_ota_fail_msg, ota_pkt->data, slen);
+        s_tank_ota_fail_msg[slen] = '\0';
+      } else {
+        strncpy(s_tank_ota_fail_msg, "OTA_FAILED", sizeof(s_tank_ota_fail_msg) - 1);
       }
-      ESP_LOGE(TAG, "🚨 [CẢNH BÁO TỪ BỂ NƯỚC] OTA THẤT BẠI! Mã lỗi: %lu (%s)",
-               (unsigned long)ota_pkt->chunk_index, err_str);
 
-      // Bắn trạng thái lỗi lên MQTT Cloud để người dùng biết ngay
+      if (s_tank_ota_sem) {
+        xSemaphoreGive(s_tank_ota_sem);
+      }
+
+      ESP_LOGE(TAG, "🚨 [CẢNH BÁO TỪ BỂ NƯỚC] OTA THẤT BẠI! Mã lỗi: %lu (%s)",
+               (unsigned long)ota_pkt->chunk_index, s_tank_ota_fail_msg);
+
+      // Bắn chuẩn event ota_progress và target esp32_tank để Backend & Web bắt được ngay lập tức
       char mqtt_buf[256];
       snprintf(mqtt_buf, sizeof(mqtt_buf),
-               "{\"event\":\"ota_status\",\"target\":\"node_tank\",\"status\":\"failed\",\"error_code\":%lu,\"message\":\"%s\"}",
-               (unsigned long)ota_pkt->chunk_index, err_str);
+               "{\"event\":\"ota_progress\",\"target\":\"esp32_tank\",\"status\":\"failed\",\"percent\":0,\"error\":\"VALIDATE_FAILED\",\"message\":\"Bể Nước từ chối firmware: %s\"}",
+               s_tank_ota_fail_msg);
       app_mqtt_publish("pump/family/status", mqtt_buf, 1, 0);
       return;
     } else if (ota_pkt->type == OTA_PACKET_TYPE_SUCCESS) {
+      s_tank_ota_final_resp = TANK_OTA_RESP_SUCCESS;
+      if (s_tank_ota_sem) {
+        xSemaphoreGive(s_tank_ota_sem);
+      }
       ESP_LOGI(TAG, "🎉 [BÁO CÁO TỪ BỂ NƯỚC] OTA THÀNH CÔNG 100%%! Bể Nước đang Reboot...");
-      char mqtt_buf[256];
-      snprintf(mqtt_buf, sizeof(mqtt_buf),
-               "{\"event\":\"ota_status\",\"target\":\"node_tank\",\"status\":\"success\",\"message\":\"OTA completed successfully, rebooting\"}");
-      app_mqtt_publish("pump/family/status", mqtt_buf, 1, 0);
       return;
     }
   }
 
   // 2. Xử lý gói tin cảm biến SensorData_t
   if (len == sizeof(SensorData_t)) {
+    // Nếu đang trong quá trình nạp OTA thì bỏ qua toàn bộ gói tin cảm biến
+    if (ota_is_updating()) {
+      return;
+    }
+
     if (recv_info && recv_info->src_addr) {
       if (!s_has_tank_mac ||
           memcmp(s_tank_mac, recv_info->src_addr, ESP_NOW_ETH_ALEN) != 0) {
         memcpy(s_tank_mac, recv_info->src_addr, ESP_NOW_ETH_ALEN);
         s_has_tank_mac = true;
 
+        if (esp_now_is_peer_exist(s_tank_mac)) {
+          esp_now_del_peer(s_tank_mac);
+        }
         esp_now_peer_info_t peer_info = {0};
         memcpy(peer_info.peer_addr, s_tank_mac, ESP_NOW_ETH_ALEN);
         peer_info.channel = 0;
@@ -117,6 +138,16 @@ static void on_esp_now_recv_cb(const esp_now_recv_info_t *recv_info,
              (unsigned long)g_recv_data.packet_id, g_recv_data.distance_cm,
              g_recv_data.battery_volt, rssi, loss_rate,
              (unsigned long)g_total_received, (unsigned long)g_total_lost);
+
+    // Bắn ACK phản hồi cho Node Bể Nước để khóa kênh Wi-Fi và MAC của Master -> Tiết kiệm 92% pin
+    if (s_has_tank_mac) {
+      ota_esp_now_packet_t ack_pkt = {
+          .type = OTA_PACKET_TYPE_ACK,
+          .chunk_index = g_recv_data.packet_id,
+          .data_len = 0,
+      };
+      esp_now_send(s_tank_mac, (const uint8_t *)&ack_pkt, sizeof(ack_pkt));
+    }
   }
 }
 
@@ -125,6 +156,9 @@ esp_err_t node_esp_init(void) {
 
   if (!s_ack_sem) {
     s_ack_sem = xSemaphoreCreateBinary();
+  }
+  if (!s_tank_ota_sem) {
+    s_tank_ota_sem = xSemaphoreCreateBinary();
   }
 
   esp_err_t err = esp_now_init();
@@ -183,17 +217,48 @@ esp_err_t node_esp_send_raw(const uint8_t *data, size_t len) {
   return esp_now_send(target_mac, data, len);
 }
 
+void node_esp_reset_ota_ack(void) {
+  s_last_acked_chunk = 0xFFFFFFFF;
+  if (s_ack_sem) {
+    xSemaphoreTake(s_ack_sem, 0);
+  }
+}
+
 bool node_esp_wait_ota_ack(uint32_t expected_chunk, uint32_t timeout_ms) {
   if (!s_ack_sem) {
     return false;
   }
   int64_t start_time = esp_timer_get_time() / 1000;
   while ((esp_timer_get_time() / 1000 - start_time) < timeout_ms) {
-    if (xSemaphoreTake(s_ack_sem, pdMS_TO_TICKS(20)) == pdTRUE) {
-      if (s_last_acked_chunk >= expected_chunk) {
+    if (xSemaphoreTake(s_ack_sem, pdMS_TO_TICKS(15)) == pdTRUE) {
+      if (s_last_acked_chunk == expected_chunk) {
         return true;
       }
     }
   }
   return false;
+}
+
+void node_esp_reset_tank_ota_status(void) {
+  s_tank_ota_final_resp = TANK_OTA_RESP_NONE;
+  s_tank_ota_fail_msg[0] = '\0';
+  if (s_tank_ota_sem) {
+    xSemaphoreTake(s_tank_ota_sem, 0);
+  }
+}
+
+tank_ota_response_t node_esp_wait_tank_ota_finish(uint32_t timeout_ms,
+                                                  char *out_err_msg,
+                                                  size_t max_len) {
+  if (!s_tank_ota_sem) {
+    return TANK_OTA_RESP_NONE;
+  }
+  if (xSemaphoreTake(s_tank_ota_sem, pdMS_TO_TICKS(timeout_ms)) == pdTRUE) {
+    if (s_tank_ota_final_resp == TANK_OTA_RESP_FAIL && out_err_msg && max_len > 0) {
+      strncpy(out_err_msg, s_tank_ota_fail_msg, max_len - 1);
+      out_err_msg[max_len - 1] = '\0';
+    }
+    return s_tank_ota_final_resp;
+  }
+  return TANK_OTA_RESP_NONE;
 }

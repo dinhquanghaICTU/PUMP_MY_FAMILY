@@ -14,7 +14,9 @@
 static const char *TAG = "SENSOR_NODE_MAIN";
 
 void app_main(void) {
-
+  /*
+      init flash và lưu thông tin cấu hình
+  */
   esp_err_t ret = nvs_flash_init();
   if (ret == ESP_ERR_NVS_NO_FREE_PAGES ||
       ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -22,18 +24,19 @@ void app_main(void) {
     ret = nvs_flash_init();
   }
   ESP_ERROR_CHECK(ret);
-
+  // init ota
   ota_node_init();
-
+  // init led
   led_init(STATUS_LED_PIN);
+  // init sensor aj_sr04m
   aj_sr04m_init(TRIG_PIN, ECHO_PIN);
-
+  // khởi tạo wifi và esp-now
   wifi_init_sta(ESP_NOW_WIFI_CHANNEL);
   esp_now_node_init(ESP_NOW_WIFI_CHANNEL);
-
+  // khởi tạo state machine
   node_state_machine_init();
 
   led_blink(3, 100);
-
+  // khởi tạo các task của node
   xTaskCreate(node_state_machine_task, "node_fsm_task", 4096, NULL, 5, NULL);
 }
