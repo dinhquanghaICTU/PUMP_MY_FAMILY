@@ -38,6 +38,19 @@ async def lifespan(app: FastAPI):
     print("Đang kết nối HiveMQ Cloud...")
     start_mqtt()
 
+    # Reset trạng thái Online cũ khi khởi động server
+    try:
+        with Session(engine) as session:
+            devices = session.exec(select(Device)).all()
+            for dev in devices:
+                dev.is_online = False
+                dev.is_tank_online = False
+                session.add(dev)
+            session.commit()
+            print("🔄 [Boot] Đã reset trạng thái thiết bị về OFFLINE chờ kết nối mới...")
+    except Exception as e:
+        print(f"Lỗi reset trạng thái thiết bị: {e}")
+
     # Khởi chạy Heartbeat Monitor phát hiện thiết bị mất nguồn / mất mạng trong 6 giây
     async def device_heartbeat_worker():
         while True:
@@ -48,7 +61,7 @@ async def lifespan(app: FastAPI):
                     devices = session.exec(select(Device).where(Device.is_online == True)).all()
                     changed = False
                     for dev in devices:
-                        if dev.updated_at and (now - dev.updated_at).total_seconds() > 6.0:
+                        if not dev.updated_at or (now - dev.updated_at).total_seconds() > 6.0:
                             dev.is_online = False
                             dev.is_tank_online = False
                             session.add(dev)
