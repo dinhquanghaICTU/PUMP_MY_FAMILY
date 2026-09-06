@@ -7,21 +7,21 @@
 #include <stdint.h>
 
 typedef enum {
-  OTA_PACKET_TYPE_START   = 0x01,
-  OTA_PACKET_TYPE_DATA    = 0x02,
-  OTA_PACKET_TYPE_END     = 0x03,
-  OTA_PACKET_TYPE_ACK     = 0x04,
-  OTA_PACKET_TYPE_FAIL    = 0x05,
+  OTA_PACKET_TYPE_START = 0x01,
+  OTA_PACKET_TYPE_DATA = 0x02,
+  OTA_PACKET_TYPE_END = 0x03,
+  OTA_PACKET_TYPE_ACK = 0x04,
+  OTA_PACKET_TYPE_FAIL = 0x05,
   OTA_PACKET_TYPE_SUCCESS = 0x06
 } ota_packet_type_t;
 
 #define OTA_CHUNK_MAX_SIZE 192
 
 typedef struct __attribute__((packed)) {
-  uint8_t  type;
-  uint32_t chunk_index; // Hoặc mã lỗi error_code khi type là FAIL
+  uint8_t type;
+  uint32_t chunk_index;
   uint16_t data_len;
-  uint8_t  data[OTA_CHUNK_MAX_SIZE];
+  uint8_t data[OTA_CHUNK_MAX_SIZE];
 } ota_esp_now_packet_t;
 
 esp_err_t ota_node_init(void);

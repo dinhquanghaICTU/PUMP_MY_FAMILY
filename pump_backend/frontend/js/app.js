@@ -1059,8 +1059,8 @@ async function handleTriggerOta(e) {
             return;
           }
 
-          // 2. Khi thiết bị đã ghi flash xong 100% và đang reboot
-          if (pct >= 100 || progRes.status === 'rebooting') {
+          // 2. Khi thiết bị đã ghi flash xong 100% và đang reboot (chỉ hiển thị chờ nếu chưa báo success)
+          if ((pct >= 100 || progRes.status === 'rebooting') && progRes.status !== 'success') {
             hasReachedReboot = true;
             if (otaProgressBar) {
               otaProgressBar.style.width = '100%';
@@ -1089,7 +1089,7 @@ async function handleTriggerOta(e) {
 
       // ĐIỀU KIỆN THÀNH CÔNG:
       // Tuyệt đối không xác nhận thành công nếu backend hoặc thiết bị đang báo lỗi (failed)
-      if (progRes && (progRes.status === 'failed' || progRes.error)) {
+      if (progRes && (progRes.status === 'failed' || (progRes.error && !progRes.error.includes('None')))) {
         return; // Để nhánh failed xử lý
       }
 
@@ -1110,17 +1110,12 @@ async function handleTriggerOta(e) {
       // Điều kiện 2: Backend/MQTT báo rõ ràng 'success'
       const isStatusSuccess = Boolean(progRes && progRes.status === 'success');
 
-      // Điều kiện 3: Thiết bị đã nạp xong 100%, đã qua nhịp chờ reboot (>= 3s) và thiết bị đã online phản hồi dữ liệu
-      const isRebootDone = Boolean(hasReachedReboot && rebootWaitCount >= 3 && currentDevice);
+      // Điều kiện 3: Thiết bị đã nạp xong 100%, đã qua nhịp chờ reboot (>= 2s) và thiết bị đã online phản hồi dữ liệu
+      const isRebootDone = Boolean(hasReachedReboot && rebootWaitCount >= 2 && currentDevice);
 
       const isOtaSuccess = isVerMatched || isStatusSuccess || isRebootDone;
 
       if (isOtaSuccess) {
-        // Kiểm tra lại lần cuối xem có cờ lỗi không
-        const finalProg = await apiCall('/admin/ota/progress').catch(() => null);
-        if (finalProg && (finalProg.status === 'failed' || finalProg.error)) {
-          return;
-        }
         clearInterval(pollInterval);
         if (otaProgressBar) {
           otaProgressBar.style.width = '100%';
