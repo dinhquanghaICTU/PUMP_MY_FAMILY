@@ -9,6 +9,7 @@ static const char *TAG = "HARDWARE_LED";
 
 static led_strip_handle_t led_strip = NULL;
 static led_state_t s_current_led_state = LED_STATE_OFF;
+static led_state_t s_previous_led_state = LED_STATE_OFF;
 
 void led_init(void) {
   led_strip_config_t strip_config = {
@@ -44,13 +45,38 @@ static void led_set_rgb(uint32_t red, uint32_t green, uint32_t blue) {
   }
 }
 
-void led_set_state(led_state_t state) { s_current_led_state = state; }
+void led_set_state(led_state_t state) {
+  if (s_current_led_state != LED_STATE_CHILD_LOCK_UNLOCKED) {
+    s_current_led_state = state;
+  } else {
+    s_previous_led_state = state;
+  }
+}
+
+void led_notify_child_lock_unlocked(void) {
+  if (s_current_led_state != LED_STATE_CHILD_LOCK_UNLOCKED) {
+    s_previous_led_state = s_current_led_state;
+  }
+  s_current_led_state = LED_STATE_CHILD_LOCK_UNLOCKED;
+}
 
 void led_task(void *pvParam) {
   ESP_LOGI(TAG, "LED Task đã khởi động!");
 
   while (1) {
     switch (s_current_led_state) {
+
+    case LED_STATE_CHILD_LOCK_UNLOCKED:
+      ESP_LOGI(TAG, "🟢 [LED] Nháy xanh lá 3 giây báo hiệu ĐÃ THOÁT KHÓA TRẺ EM!");
+      for (int i = 0; i < 6; i++) {
+        led_set_rgb(0, 80, 0); // Xanh lá sáng rõ
+        vTaskDelay(pdMS_TO_TICKS(250));
+        led_set_rgb(0, 0, 0);
+        vTaskDelay(pdMS_TO_TICKS(250));
+      }
+      // Sau 3 giây nháy xong, khôi phục lại trạng thái LED trước đó
+      s_current_led_state = s_previous_led_state;
+      break;
 
     case LED_STATE_OFF:
       led_set_rgb(0, 0, 0);

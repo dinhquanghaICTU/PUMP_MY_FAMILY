@@ -8,6 +8,7 @@
 #include "m_pump_controler.h"
 #include "m_state_machine.h"
 #include "relay.h"
+#include "led.h"
 
 static const char *TAG = "HARDWARE_BUTTON";
 static TaskHandle_t s_btn_task_handle = NULL;
@@ -37,10 +38,25 @@ static void on_btn_event(int pin, int event, void *data) {
     m_pump_controler_toggle_pump();
   } else if (event == APP_BTN_EVT_HOLD) {
     uint32_t *hold_time = (uint32_t *)data;
-    ESP_LOGW(
-        TAG,
-        "[NÚT BẤM] -> Nhấn giữ 5 giây (%lu ms) -> Xóa Wi-Fi & Vào BLE Config!",
-        hold_time ? (unsigned long)*hold_time : 5000);
+    const m_controler_pump_t *ctx = m_pump_controler_get_context();
+    if (ctx && ctx->child_lock) {
+      ESP_LOGW(TAG, "🔓 [NÚT BẤM] Khóa Trẻ Em đang BẬT -> Đã nhấn giữ 3s (%lu ms) -> MỞ KHÓA TRẺ EM THÀNH CÔNG! Đang nháy LED xanh 3s...",
+               hold_time ? (unsigned long)*hold_time : 3000);
+      m_pump_controler_set_child_lock(false);
+      led_notify_child_lock_unlocked();
+    } else {
+      uint32_t ms = hold_time ? *hold_time : 3000;
+      if (ms >= 5000) {
+        ESP_LOGW(TAG, "[NÚT BẤM] -> Nhấn giữ 5 giây (%lu ms) -> Xóa Wi-Fi & Vào BLE Config!", (unsigned long)ms);
+        m_state_machine_reset_wifi();
+      } else {
+        ESP_LOGI(TAG, "[NÚT BẤM] -> Nhấn giữ %lu ms (Khóa trẻ em hiện đang tắt, không có thao tác)", (unsigned long)ms);
+      }
+    }
+  } else if (event == APP_BTN_EVT_HOLD_LONG) {
+    uint32_t *hold_time = (uint32_t *)data;
+    ESP_LOGW(TAG, "[NÚT BẤM] -> Nhấn giữ 10 giây (%lu ms) -> XÓA WI-FI & VÀO BLE CONFIG!",
+             hold_time ? (unsigned long)*hold_time : 10000);
     m_state_machine_reset_wifi();
   }
 }
@@ -72,6 +88,7 @@ esp_err_t button_init(void) {
   app_btn_initialize(&cfg);
   app_btn_register_callback(APP_BTN_EVT_PRESSED, on_btn_event, NULL);
   app_btn_register_callback(APP_BTN_EVT_HOLD, on_btn_event, NULL);
+  app_btn_register_callback(APP_BTN_EVT_HOLD_LONG, on_btn_event, NULL);
 
   ESP_LOGI(TAG, "Khởi tạo Nút bấm Tủ Điện (GPIO %d) THÀNH CÔNG!", BUTTON_PIN);
   return ESP_OK;

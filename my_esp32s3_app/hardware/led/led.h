@@ -17,12 +17,13 @@ typedef enum {
 
   LED_STATE_OTA_UPDATING,
 
-  LED_STATE_ERROR_TRIPPED
-
+  LED_STATE_ERROR_TRIPPED,
+  LED_STATE_CHILD_LOCK_UNLOCKED
 } led_state_t;
 
 void led_init(void);
 void led_set_state(led_state_t state);
+void led_notify_child_lock_unlocked(void);
 void led_task(void *pvParam);
 
 #endif //__LED_H__

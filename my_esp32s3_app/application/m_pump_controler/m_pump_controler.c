@@ -283,6 +283,12 @@ esp_err_t m_pump_controler_init(void) {
     if (nvs_get_u8(nvs, "max_pct", &val_u8) == ESP_OK && val_u8 <= 100) {
       s_pump_ctx.max_water_percent = val_u8;
     }
+    uint8_t saved_lock = 0;
+    if (nvs_get_u8(nvs, "child_lock", &saved_lock) == ESP_OK) {
+      s_pump_ctx.child_lock = (saved_lock == 1);
+      ESP_LOGI(TAG, "⚡ [NVS BOOT] Khôi phục Khóa trẻ em từ Flash: [%s]",
+               s_pump_ctx.child_lock ? "BẬT" : "TẮT");
+    }
     nvs_close(nvs);
   }
 
@@ -344,8 +350,8 @@ void m_pump_controler_toggle_pump(void) {
     ESP_LOGW(TAG, "🤖 [CHẾ ĐỘ TỰ ĐỘNG (AUTO)] Đang kích hoạt! Đã KHÓA nút cứng tủ điện (hãy chuyển sang MANUAL trên App để điều khiển bằng tay).");
     return;
   }
-  if (is_online && s_pump_ctx.child_lock) {
-    ESP_LOGW(TAG, "🔒 [KHÓA TRẺ EM] Đang BẬT! Bỏ qua thao tác bấm nút.");
+  if (s_pump_ctx.child_lock) {
+    ESP_LOGW(TAG, "🔒 [KHÓA TRẺ EM] Đang BẬT! Bỏ qua thao tác bấm nút (Nhấn giữ 3 giây để thoát Khóa trẻ em).");
     return;
   }
   relay_toggle();
@@ -354,6 +360,38 @@ void m_pump_controler_toggle_pump(void) {
 void m_pump_controler_set_child_lock(bool enable) {
   s_pump_ctx.child_lock = enable;
   ESP_LOGI(TAG, "Khóa trẻ em: %s", enable ? "BẬT (LOCKED)" : "TẮT (UNLOCKED)");
+
+  // Lưu trạng thái vào NVS Flash để nhớ sau khi mất nguồn / khởi động lại
+  nvs_handle_t nvs;
+  if (nvs_open("system_cfg", NVS_READWRITE, &nvs) == ESP_OK) {
+    nvs_set_u8(nvs, "child_lock", enable ? 1 : 0);
+    nvs_commit(nvs);
+    nvs_close(nvs);
+    ESP_LOGI(TAG, "💾 [NVS SAVE] Đã lưu trạng thái Khóa trẻ em [%s] vào Flash NVS!",
+             enable ? "BẬT" : "TẮT");
+  }
+
+  // Nếu đang kết nối MQTT, gửi cập nhật ngay lập tức để Web/App đồng bộ
+  if (wifi_is_connected() && app_mqtt_is_connected()) {
+    char stat_json[320];
+    const m_controler_pump_t *ctx = &s_pump_ctx;
+    snprintf(
+        stat_json, sizeof(stat_json),
+        "{\"pump\":%d,\"mode\":\"%s\",\"water_percent\":%.1f,\"distance_cm\":"
+        "%.1f,\"battery\":%.2f,\"runtime\":%lu,\"child_lock\":%d,\"tank_online\":%d,\"state\":"
+        "\"%s\",\"version\":\"%s\",\"tank_version\":\"%s\"}",
+        ctx->is_pump_on ? 1 : 0,
+        ctx->mode == MODE_PUMP_AUTO ? "auto" : "manual",
+        ctx->current_percent, ctx->current_distance_cm,
+        ctx->node_battery_volt,
+        (unsigned long)ctx->runtime_counter_sec,
+        ctx->child_lock ? 1 : 0,
+        1,
+        ctx->is_pump_on ? "RUNNING" : "IDLE",
+        ota_get_current_version(),
+        ota_get_tank_version());
+    app_mqtt_publish("pump/family/status", stat_json, 1, 0);
+  }
 }
 
 void m_pump_controler_set_config(float tank_height_cm, float sensor_offset_cm,
