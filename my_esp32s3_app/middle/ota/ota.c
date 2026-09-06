@@ -66,7 +66,8 @@ const char *ota_get_tank_version(void) {
 }
 
 void ota_set_tank_version(const char *ver) {
-  if (!ver || strlen(ver) == 0) return;
+  if (!ver || strlen(ver) == 0)
+    return;
   if (strncmp(s_tank_ver_buf, ver, sizeof(s_tank_ver_buf)) != 0) {
     strncpy(s_tank_ver_buf, ver, sizeof(s_tank_ver_buf) - 1);
     s_tank_ver_buf[sizeof(s_tank_ver_buf) - 1] = '\0';
@@ -76,7 +77,9 @@ void ota_set_tank_version(const char *ver) {
       nvs_commit(nvs);
       nvs_close(nvs);
     }
-    ESP_LOGI(TAG, "💾 [CẬP NHẬT VERSION BỂ NƯỚC] Phiên bản Bể Nước hiện tại: [%s]", s_tank_ver_buf);
+    ESP_LOGI(TAG,
+             "💾 [CẬP NHẬT VERSION BỂ NƯỚC] Phiên bản Bể Nước hiện tại: [%s]",
+             s_tank_ver_buf);
   }
 }
 
@@ -288,15 +291,20 @@ static void ota_tank_esp_now_task(void *pvParameter) {
 
   // 1. Handshake với Node Bể Nước - Chờ Node ACK sẵn sàng nhận OTA
   bool tank_ready = false;
-  ESP_LOGI(TAG, "⏳ Đang gửi lệnh khởi động OTA và chờ phản hồi từ Node Bể Nước...");
+  ESP_LOGI(TAG,
+           "⏳ Đang gửi lệnh khởi động OTA và chờ phản hồi từ Node Bể Nước...");
 
   for (int retry = 1; retry <= 25; retry++) {
     node_esp_reset_ota_ack();
-    node_esp_send_raw((const uint8_t *)&pkt_start, sizeof(ota_esp_now_packet_t));
+    node_esp_send_raw((const uint8_t *)&pkt_start,
+                      sizeof(ota_esp_now_packet_t));
 
     if (node_esp_wait_ota_ack(0, 500)) {
       tank_ready = true;
-      ESP_LOGI(TAG, "✅ [HANDSHAKE THÀNH CÔNG] Node Bể Nước đã phản hồi ACK SẴN SÀNG nhận OTA (Lần %d)!", retry);
+      ESP_LOGI(TAG,
+               "✅ [HANDSHAKE THÀNH CÔNG] Node Bể Nước đã phản hồi ACK SẴN "
+               "SÀNG nhận OTA (Lần %d)!",
+               retry);
       break;
     }
     ESP_LOGW(TAG, "Đang gọi Node Bể Nước (Lần %d/25)...", retry);
@@ -304,12 +312,15 @@ static void ota_tank_esp_now_task(void *pvParameter) {
   }
 
   if (!tank_ready) {
-    ESP_LOGE(TAG, "❌ [LỖI OTA] Không nhận được phản hồi từ Node Bể Nước sau 25 lần thử! Hủy tiến trình.");
+    ESP_LOGE(TAG, "❌ [LỖI OTA] Không nhận được phản hồi từ Node Bể Nước sau "
+                  "25 lần thử! Hủy tiến trình.");
     char err_buf[256];
     snprintf(err_buf, sizeof(err_buf),
              "{\"event\":\"ota_progress\",\"target\":\"esp32_tank\","
-             "\"status\":\"failed\",\"percent\":0,\"error\":\"TANK_NODE_UNRESPONSIVE\","
-             "\"message\":\"Không thể kết nối với Node Bể Nước (Timeout chờ ACK)! Vui lòng kiểm tra nguồn và khoảng cách con bể.\"}");
+             "\"status\":\"failed\",\"percent\":0,\"error\":\"TANK_NODE_"
+             "UNRESPONSIVE\","
+             "\"message\":\"Không thể kết nối với Node Bể Nước (Timeout chờ "
+             "ACK)! Vui lòng kiểm tra nguồn và khoảng cách con bể.\"}");
     app_mqtt_publish("pump/family/status", err_buf, 1, 0);
 
     esp_http_client_close(client);
@@ -321,7 +332,6 @@ static void ota_tank_esp_now_task(void *pvParameter) {
     return;
   }
 
-  // Báo web frontend: Node Bể đã nhận lệnh, bắt đầu truyền dữ liệu
   char init_buf[256];
   snprintf(init_buf, sizeof(init_buf),
            "{\"event\":\"ota_progress\",\"target\":\"esp32_tank\","
@@ -330,10 +340,8 @@ static void ota_tank_esp_now_task(void *pvParameter) {
            content_length);
   app_mqtt_publish("pump/family/status", init_buf, 1, 0);
 
-  // Cho Node Bể Nước 400ms chuẩn bị partition
   vTaskDelay(pdMS_TO_TICKS(400));
 
-  // 2. Vòng lặp tải từng chunk 192 bytes và bắn có xác nhận ACK từng chunk một (Zero-Loss)
   uint32_t chunk_idx = 0;
   size_t total_sent = 0;
   ota_esp_now_packet_t pkt_data;
@@ -368,17 +376,23 @@ static void ota_tank_esp_now_task(void *pvParameter) {
 
     if (!chunk_acked) {
       consecutive_failed_chunks++;
-      ESP_LOGE(TAG, "❌ Không nhận được ACK chunk #%lu sau 15 lần thử (Liên tiếp mất: %d)",
+      ESP_LOGE(TAG,
+               "❌ Không nhận được ACK chunk #%lu sau 15 lần thử (Liên tiếp "
+               "mất: %d)",
                (unsigned long)chunk_idx, consecutive_failed_chunks);
       if (consecutive_failed_chunks >= 3) {
-        ESP_LOGE(TAG, "❌ [LỖI OTA] Mất kết nối hoàn toàn với Node Bể Nước tại chunk #%lu! Hủy tiến trình.",
+        ESP_LOGE(TAG,
+                 "❌ [LỖI OTA] Mất kết nối hoàn toàn với Node Bể Nước tại "
+                 "chunk #%lu! Hủy tiến trình.",
                  (unsigned long)chunk_idx);
         char fail_buf[256];
-        snprintf(fail_buf, sizeof(fail_buf),
-                 "{\"event\":\"ota_progress\",\"target\":\"esp32_tank\","
-                 "\"status\":\"failed\",\"percent\":%d,\"error\":\"CHUNK_TIMEOUT\","
-                 "\"message\":\"Mất kết nối với Node Bể Nước giữa chừng!\"}",
-                 (content_length > 0) ? (int)((total_sent * 100) / content_length) : 0);
+        snprintf(
+            fail_buf, sizeof(fail_buf),
+            "{\"event\":\"ota_progress\",\"target\":\"esp32_tank\","
+            "\"status\":\"failed\",\"percent\":%d,\"error\":\"CHUNK_TIMEOUT\","
+            "\"message\":\"Mất kết nối với Node Bể Nước giữa chừng!\"}",
+            (content_length > 0) ? (int)((total_sent * 100) / content_length)
+                                 : 0);
         app_mqtt_publish("pump/family/status", fail_buf, 1, 0);
 
         esp_http_client_close(client);
@@ -405,7 +419,7 @@ static void ota_tank_esp_now_task(void *pvParameter) {
       if (progress > 100)
         progress = 100;
       ESP_LOGI(TAG,
-               "📡 [OTA PER-CHUNK ACK] Tiến độ: %d%% (%d/%d bytes - Chunk #%lu "
+               "[OTA PER-CHUNK ACK] Tiến độ: %d%% (%d/%d bytes - Chunk #%lu "
                "| Retries: %lu)",
                progress, (int)total_sent, content_length,
                (unsigned long)chunk_idx, (unsigned long)total_retries);
@@ -435,45 +449,55 @@ static void ota_tank_esp_now_task(void *pvParameter) {
   }
 
   ESP_LOGI(TAG,
-           "📦 Đã gửi toàn bộ firmware sang Node Bể Nước (%d bytes). Đang chờ Bể Nước xác thực Flash...",
+           "📦 Đã gửi toàn bộ firmware sang Node Bể Nước (%d bytes). Đang chờ "
+           "Bể Nước xác thực Flash...",
            (int)total_sent);
 
   char tank_err[64] = "TIMEOUT";
-  tank_ota_response_t tank_res = node_esp_wait_tank_ota_finish(15000, tank_err, sizeof(tank_err));
+  tank_ota_response_t tank_res =
+      node_esp_wait_tank_ota_finish(15000, tank_err, sizeof(tank_err));
 
   esp_http_client_close(client);
   esp_http_client_cleanup(client);
 
   if (tank_res == TANK_OTA_RESP_SUCCESS) {
-    SensorData_t latest_node_data = {0};
-    const char *final_tank_ver = s_current_ota_cfg.version;
-    if (node_esp_get_latest_data(&latest_node_data) && strlen(latest_node_data.fw_version) > 0) {
-      final_tank_ver = latest_node_data.fw_version;
-    }
+    const char *final_tank_ver = (strlen(s_current_ota_cfg.version) > 0)
+                                     ? s_current_ota_cfg.version
+                                     : "1.0.0";
     ota_set_tank_version(final_tank_ver);
-    ESP_LOGI(TAG, "🎉 [XÁC NHẬN TỪ BỂ NƯỚC] Flash hợp lệ! Cập nhật phiên bản mới: [%s]", final_tank_ver);
+    ESP_LOGI(
+        TAG,
+        "🎉 [XÁC NHẬN TỪ BỂ NƯỚC] Flash hợp lệ! Cập nhật phiên bản mới: [%s]",
+        final_tank_ver);
     char stat_buf[256];
     snprintf(stat_buf, sizeof(stat_buf),
              "{\"event\":\"ota_progress\",\"target\":\"esp32_tank\",\"status\":"
              "\"success\",\"percent\":100,\"version\":\"%s\",\"message\":\"Cập "
-             "nhật Bể Nước thành công 100%%! Node Bể Nước đã chạy ok với firmware v%s\"}",
+             "nhật Bể Nước thành công 100%%! Node Bể Nước đang khởi động với "
+             "firmware v%s\"}",
              final_tank_ver, final_tank_ver);
     app_mqtt_publish("pump/family/status", stat_buf, 1, 0);
   } else if (tank_res == TANK_OTA_RESP_FAIL) {
-    ESP_LOGE(TAG, "❌ [BỂ NƯỚC TỪ CHỐI FIRMWARE] Lỗi: %s (Có thể sai chip ESP32 hoặc file lỗi)", tank_err);
-    // TUYỆT ĐỐI KHÔNG lưu vào NVS, giữ nguyên phiên bản cũ!
-    char fail_buf[256];
-    snprintf(fail_buf, sizeof(fail_buf),
-             "{\"event\":\"ota_progress\",\"target\":\"esp32_tank\",\"status\":"
-             "\"failed\",\"percent\":0,\"error\":\"VALIDATE_FAILED\",\"message\":\"Bể Nước từ chối firmware: %s (Sai chip ESP32 hoặc file hỏng)\"}",
+    ESP_LOGE(TAG,
+             "❌ [BỂ NƯỚC TỪ CHỐI FIRMWARE] Lỗi: %s (Có thể sai chip ESP32 "
+             "hoặc file lỗi)",
              tank_err);
+
+    char fail_buf[256];
+    snprintf(
+        fail_buf, sizeof(fail_buf),
+        "{\"event\":\"ota_progress\",\"target\":\"esp32_tank\",\"status\":"
+        "\"failed\",\"percent\":0,\"error\":\"VALIDATE_FAILED\",\"message\":"
+        "\"Bể Nước từ chối firmware: %s (Sai chip ESP32 hoặc file hỏng)\"}",
+        tank_err);
     app_mqtt_publish("pump/family/status", fail_buf, 1, 0);
   } else {
     ESP_LOGW(TAG, "⚠️ Không nhận được phản hồi kết thúc từ Bể Nước sau 15 giây");
     char fail_buf[256];
     snprintf(fail_buf, sizeof(fail_buf),
              "{\"event\":\"ota_progress\",\"target\":\"esp32_tank\",\"status\":"
-             "\"failed\",\"percent\":100,\"error\":\"RESP_TIMEOUT\",\"message\":\"Hết thời gian chờ Bể Nước xác nhận Flash\"}");
+             "\"failed\",\"percent\":100,\"error\":\"RESP_TIMEOUT\","
+             "\"message\":\"Hết thời gian chờ Bể Nước xác nhận Flash\"}");
     app_mqtt_publish("pump/family/status", fail_buf, 1, 0);
   }
 
@@ -526,6 +550,4 @@ esp_err_t ota_start(const ota_config_t *config) {
   return ESP_OK;
 }
 
-bool ota_is_updating(void) {
-  return s_is_updating;
-}
+bool ota_is_updating(void) { return s_is_updating; }
