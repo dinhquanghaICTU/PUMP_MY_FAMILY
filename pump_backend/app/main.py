@@ -51,7 +51,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"Lỗi reset trạng thái thiết bị: {e}")
 
-    # Khởi chạy Heartbeat Monitor phát hiện thiết bị mất nguồn / mất mạng trong 6 giây
+    # Khởi chạy Heartbeat Monitor phát hiện thiết bị mất nguồn / mất mạng quá 10 giây
     async def device_heartbeat_worker():
         while True:
             try:
@@ -61,12 +61,12 @@ async def lifespan(app: FastAPI):
                     devices = session.exec(select(Device).where(Device.is_online == True)).all()
                     changed = False
                     for dev in devices:
-                        if not dev.updated_at or (now - dev.updated_at).total_seconds() > 6.0:
+                        if not dev.updated_at or (now - dev.updated_at).total_seconds() >= 10.0:
                             dev.is_online = False
                             dev.is_tank_online = False
                             session.add(dev)
                             changed = True
-                            print(f"🔴 [HEARTBEAT TIMEOUT] {dev.device_code} không gửi tín hiệu quá 6s -> Chuyển sang OFFLINE!")
+                            print(f"🔴 [HEARTBEAT TIMEOUT] {dev.device_code} không gửi tín hiệu quá 10s -> Chuyển sang OFFLINE!")
                     if changed:
                         session.commit()
             except asyncio.CancelledError:
