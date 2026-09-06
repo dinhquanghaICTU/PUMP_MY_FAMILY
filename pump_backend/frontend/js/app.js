@@ -997,6 +997,47 @@ async function handleTriggerOta(e) {
 
     const pollInterval = setInterval(async () => {
       pollCount++;
+
+      // 1. KIỂM TRA PHIÊN BẢN THIẾT BỊ TRƯỚC TIÊN (ƯU TIÊN TUYỆT ĐỐI)
+      // BẤT KỂ thanh % đang ở 50%, 80% hay đang chờ reboot:
+      // Ngay khi thiết bị gửi dữ liệu lên và phiên bản đã đổi khác ban đầu (hoặc khớp mục tiêu):
+      // -> LẬP TỨC ĐẨY THÀNH CÔNG 100% VÀ ĐÓNG TIẾN TRÌNH!
+      await fetchDeviceData(false);
+      updateOtaTargetVersionDisplay();
+
+      const currentVer = target === 'esp32_tank'
+        ? currentDevice?.tank_firmware_version
+        : currentDevice?.firmware_version;
+
+      const cleanVer = (v) => String(v || '').trim().toLowerCase().replace(/^v/, '');
+      const curClean = cleanVer(currentVer);
+      const tgtClean = cleanVer(version);
+      const initClean = cleanVer(initialVer);
+
+      const isVerChanged = Boolean(initClean && curClean && curClean !== initClean);
+      const isTargetMatched = Boolean(tgtClean && curClean && curClean === tgtClean && (initClean !== tgtClean || pollCount >= 3));
+
+      if (isVerChanged || isTargetMatched) {
+        clearInterval(pollInterval);
+        if (otaProgressBar) {
+          otaProgressBar.style.width = '100%';
+          otaProgressBar.style.background = 'linear-gradient(90deg, #10b981, #059669)';
+        }
+        if (otaPercentText) otaPercentText.textContent = '100%';
+        if (otaBytesInfo && uploadData.size) {
+          const kbTotal = (uploadData.size / 1024).toFixed(0);
+          otaBytesInfo.textContent = `${kbTotal} KB / ${kbTotal} KB`;
+        }
+        if (otaSpinner) otaSpinner.style.display = 'none';
+        if (btnSubmitOta) btnSubmitOta.disabled = false;
+
+        const displayVer = currentVer || version;
+        otaStatusText.innerHTML = `<i class="fa-solid fa-circle-check" style="color:#10b981; font-size:1.2rem;"></i> <b style="color:#10b981;">NÂNG CẤP THÀNH CÔNG! Thiết bị đã kích hoạt v${displayVer}</b>`;
+        showToast(`🎉 NÂNG CẤP THÀNH CÔNG! Thiết bị đã cập nhật lên phiên bản v${displayVer}!`, 'success');
+        updateOtaTargetVersionDisplay();
+        return;
+      }
+
       let progRes = null;
       try {
         progRes = await apiCall('/admin/ota/progress');
