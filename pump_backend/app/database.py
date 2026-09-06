@@ -17,6 +17,9 @@ def init_db():
             ALTER TABLE devices ADD COLUMN IF NOT EXISTS max_water_percent INTEGER DEFAULT 90;
             ALTER TABLE devices ADD COLUMN IF NOT EXISTS firmware_version VARCHAR(50) DEFAULT '1.0.0';
             ALTER TABLE devices ADD COLUMN IF NOT EXISTS tank_firmware_version VARCHAR(50) DEFAULT '1.0.0';
+            ALTER TABLE devices ADD COLUMN IF NOT EXISTS battery_voltage DOUBLE PRECISION;
+            ALTER TABLE devices ADD COLUMN IF NOT EXISTS distance_cm DOUBLE PRECISION;
+            ALTER TABLE devices ADD COLUMN IF NOT EXISTS pump_runtime INTEGER DEFAULT 0;
         """))
         conn.commit()
 

@@ -63,6 +63,9 @@ def list_devices(
                 "max_water_percent": d.max_water_percent,
                 "firmware_version": d.firmware_version or "1.0.0",
                 "tank_firmware_version": d.tank_firmware_version or "1.0.0",
+                "battery_voltage": d.battery_voltage,
+                "distance_cm": d.distance_cm,
+                "pump_runtime": d.pump_runtime or 0,
                 "permission": s.permission,
                 "role": "MEMBER"
             })
@@ -84,6 +87,9 @@ def list_devices(
                 "max_water_percent": d.max_water_percent,
                 "firmware_version": d.firmware_version or "1.0.0",
                 "tank_firmware_version": d.tank_firmware_version or "1.0.0",
+                "battery_voltage": d.battery_voltage,
+                "distance_cm": d.distance_cm,
+                "pump_runtime": d.pump_runtime or 0,
                 "role": "OWNER"
             }
             for d in owned_devices

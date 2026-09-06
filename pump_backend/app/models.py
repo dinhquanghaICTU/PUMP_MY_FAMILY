@@ -51,6 +51,9 @@ class Device(SQLModel, table=True):
     max_water_percent: int = Field(default=90)       # Ngưỡng tự động ngắt (%)
     firmware_version: str = Field(default="1.0.0")   # Phiên bản firmware Node Tủ Điện (S3)
     tank_firmware_version: str = Field(default="1.0.0") # Phiên bản firmware Node Bể Nước (ESP32)
+    battery_voltage: Optional[float] = Field(default=None) # Điện áp pin Node Bể (V)
+    distance_cm: Optional[float] = Field(default=None)     # Khoảng cách mặt nước từ cảm biến (cm)
+    pump_runtime: Optional[int] = Field(default=0)         # Thời gian bơm hiện tại (giây)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

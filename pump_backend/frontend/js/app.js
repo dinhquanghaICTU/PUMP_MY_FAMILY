@@ -472,6 +472,39 @@ function updateCurrentDeviceView() {
     toggleAutoMode.disabled = false;
     toggleChildLock.disabled = false;
   }
+
+  // Telemetry Micro Cards: PIN NODE BỂ, KHOẢNG CÁCH, THỜI GIAN BƠM
+  if (nodeBatteryDisplay) {
+    if (currentDevice.battery_voltage !== null && currentDevice.battery_voltage !== undefined && currentDevice.battery_voltage > 0) {
+      nodeBatteryDisplay.textContent = `${Number(currentDevice.battery_voltage).toFixed(2)} V`;
+    } else {
+      nodeBatteryDisplay.textContent = '-- V';
+    }
+  }
+
+  if (waterDistanceDisplay) {
+    if (currentDevice.distance_cm !== null && currentDevice.distance_cm !== undefined && currentDevice.distance_cm >= 0) {
+      waterDistanceDisplay.textContent = `${Number(currentDevice.distance_cm).toFixed(1)} cm`;
+    } else {
+      waterDistanceDisplay.textContent = '-- cm';
+    }
+  }
+
+  if (pumpRuntimeDisplay) {
+    const rt = currentDevice.pump_runtime || 0;
+    if (rt >= 3600) {
+      const h = Math.floor(rt / 3600);
+      const m = Math.floor((rt % 3600) / 60);
+      const s = rt % 60;
+      pumpRuntimeDisplay.textContent = `${h}h ${m}m ${s}s`;
+    } else if (rt >= 60) {
+      const m = Math.floor(rt / 60);
+      const s = rt % 60;
+      pumpRuntimeDisplay.textContent = `${m}m ${s}s`;
+    } else {
+      pumpRuntimeDisplay.textContent = `${rt}s`;
+    }
+  }
 }
 
 function resetDashboardView() {
@@ -479,6 +512,9 @@ function resetDashboardView() {
   waterPercentDisplay.textContent = '--%';
   waterStatusText.textContent = 'Chưa có thiết bị';
   currentDeviceCode.textContent = '---';
+  if (nodeBatteryDisplay) nodeBatteryDisplay.textContent = '-- V';
+  if (waterDistanceDisplay) waterDistanceDisplay.textContent = '-- cm';
+  if (pumpRuntimeDisplay) pumpRuntimeDisplay.textContent = '0s';
 }
 
 async function fetchDeviceData(showToastNotice = false) {

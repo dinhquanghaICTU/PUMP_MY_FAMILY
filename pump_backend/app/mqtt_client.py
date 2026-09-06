@@ -66,6 +66,12 @@ def on_message(client, userdata, msg):
                     device.is_auto_mode = (data["mode"] == "auto")
                 if "child_lock" in data:
                     device.is_child_lock = bool(data["child_lock"] == 1)
+                if "battery" in data and data["battery"] is not None:
+                    device.battery_voltage = round(float(data["battery"]), 2)
+                if "distance_cm" in data and data["distance_cm"] is not None:
+                    device.distance_cm = round(float(data["distance_cm"]), 1)
+                if "runtime" in data and data["runtime"] is not None:
+                    device.pump_runtime = int(data["runtime"])
                 # CHỈ cập nhật phiên bản từ gói tin telemetry thông thường, KHÔNG lấy từ gói tin ota_progress
                 if not data.get("event"):
                     if "version" in data and data["version"]:
