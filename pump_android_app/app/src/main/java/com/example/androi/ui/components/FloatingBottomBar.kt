@@ -8,10 +8,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AdminPanelSettings
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Home
-import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -31,7 +31,7 @@ enum class NavigationTab(val title: String, val icon: ImageVector) {
     HOME("Tổng quan", Icons.Rounded.Home),
     SCHEDULE("Lịch hẹn", Icons.Rounded.CalendarMonth),
     DEVICES("Thiết bị", Icons.Rounded.GridView),
-    PROFILE("Cá nhân", Icons.Rounded.Person)
+    ADMIN("Quản trị", Icons.Rounded.AdminPanelSettings)
 }
 
 /**
