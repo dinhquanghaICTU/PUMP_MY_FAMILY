@@ -624,7 +624,10 @@ function startPolling() {
   stopPolling();
   pollingInterval = setInterval(() => {
     fetchDeviceData(false);
-  }, 2500); // 2.5 giây cập nhật 1 lần
+    if (currentDevice) {
+      fetchDeviceLogs();
+    }
+  }, 2500); // 2.5 giây tự động đồng bộ trạng thái bơm và lịch sử sự kiện
 }
 
 function stopPolling() {

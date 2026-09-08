@@ -164,3 +164,30 @@ def revoke_share(
     session.delete(share)
     session.commit()
     return {"message": "Đã thu hồi quyền truy cập thành công!"}
+
+@router.delete("/{device_id}", summary="Xóa thiết bị máy bơm")
+def delete_device(
+    device_id: str,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    device = session.get(Device, device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="Không tìm thấy thiết bị!")
+
+    if device.owner_id != current_user.id and current_user.role != "SUPER_ADMIN":
+        raise HTTPException(status_code=403, detail="Chỉ Chủ sở hữu mới có quyền xóa máy bơm này!")
+
+    # Xóa các liên kết chia sẻ và nhật ký trước
+    shares = session.exec(select(DeviceShare).where(DeviceShare.device_id == device_id)).all()
+    for s in shares:
+        session.delete(s)
+
+    logs = session.exec(select(PumpLog).where(PumpLog.device_id == device_id)).all()
+    for l in logs:
+        session.delete(l)
+
+    session.delete(device)
+    session.commit()
+    return {"message": f"Đã xóa thiết bị [{device.name}] thành công!"}
+
