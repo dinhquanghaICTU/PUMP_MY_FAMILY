@@ -474,12 +474,27 @@ function updateCurrentDeviceView() {
     pumpButtonText.textContent = 'MÁY BƠM OFFLINE';
     pumpStatePill.textContent = 'OFFLINE';
     pumpStatePill.className = 'device-state-pill state-idle';
+  } else if (currentDevice.is_auto_mode) {
+    pumpToggleButton.classList.add('disabled');
+    if (currentDevice.is_pump_running) {
+      pumpToggleButton.classList.add('active');
+      pumpButtonText.textContent = 'TỰ ĐỘNG: ĐANG BƠM';
+      pumpStatePill.textContent = 'AUTO ON';
+      pumpStatePill.className = 'device-state-pill state-running';
+    } else {
+      pumpToggleButton.classList.remove('active');
+      pumpButtonText.textContent = 'TỰ ĐỘNG: ĐANG CHỜ';
+      pumpStatePill.textContent = 'AUTO IDLE';
+      pumpStatePill.className = 'device-state-pill state-idle';
+    }
   } else if (currentDevice.is_pump_running) {
+    pumpToggleButton.classList.remove('disabled');
     pumpToggleButton.classList.add('active');
     pumpButtonText.textContent = 'BƠM ĐANG CHẠY';
     pumpStatePill.textContent = 'ĐANG BƠM';
     pumpStatePill.className = 'device-state-pill state-running';
   } else {
+    pumpToggleButton.classList.remove('disabled');
     pumpToggleButton.classList.remove('active');
     pumpButtonText.textContent = 'MÁY BƠM TẮT';
     pumpStatePill.textContent = 'CHỜ BƠM';
@@ -640,6 +655,10 @@ function stopPolling() {
 // ==================== PUMP CONTROL ACTIONS ====================
 async function handleTogglePump() {
   if (!currentDevice) return;
+  if (currentDevice.is_auto_mode) {
+    showToast('Máy đang ở chế độ Tự Động! Vui lòng gạt tắt Tự Động để điều khiển thủ công.', 'warning');
+    return;
+  }
   const nextAction = currentDevice.is_pump_running ? 'PUMP_OFF' : 'PUMP_ON';
   
   try {
